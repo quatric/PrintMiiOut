@@ -1,0 +1,7 @@
+flask>=3.0
+requests>=2.31
+pycryptodome>=3.20
+opencv-python-headless>=4.8
+zxing-cpp>=2.2
+sentry-sdk[flask]>=2.0
+python-dotenv>=1.0
