@@ -11,6 +11,7 @@ import tempfile
 import threading
 import uuid
 import time
+import json
 
 import requests
 from dotenv import load_dotenv
@@ -36,12 +37,33 @@ app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # 2 MB upload limit
 
 MII_API_BASE = "https://mii-unsecure.ariankordi.net"
 
-# In-memory job store  {job_id: {"status": ..., "file": ..., "error": ...}}
-JOBS: dict = {}
+# Disk-backed job store for multi-process Gunicorn workers
+JOBS_DIR = "/tmp/printmiiout_jobs"
+os.makedirs(JOBS_DIR, exist_ok=True)
 JOBS_LOCK = threading.Lock()
 
 # Cleanup old jobs after this many seconds
-JOB_TTL = 300
+JOB_TTL = 1800  # 30 minutes — file is cleaned up on download, this is a fallback
+
+
+def _get_job(job_id: str) -> dict | None:
+    path = os.path.join(JOBS_DIR, job_id, "job.json")
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return None
+
+
+def _save_job(job_id: str, job_data: dict):
+    jdir = os.path.join(JOBS_DIR, job_id)
+    os.makedirs(jdir, exist_ok=True)
+    path = os.path.join(jdir, "job.json")
+    with JOBS_LOCK:
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(job_data, fh)
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +82,34 @@ def _decrypt_mii_qr_bytes(qr_bytes: bytes) -> bytes:
     cipher = AES.new(MII_QR_KEY, AES.MODE_CCM, nonce + bytes([0, 0, 0, 0]))
     content = cipher.decrypt(qr_bytes[8:8+0x58])
     return content[:12] + nonce + content[12:]
+
+
+def _normalize_mii_data(val: bytes | str) -> str:
+    """Normalize any binary Mii file (.miigx, .mii, .ffsd) or base64/hex string to lowercase hex."""
+    import base64
+    if isinstance(val, bytes):
+        raw = val
+        if len(raw) == 112:
+            try:
+                raw = _decrypt_mii_qr_bytes(raw)
+            except Exception:
+                pass
+        return raw.hex()
+    s = val.strip()
+    if "data=" in s:
+        s = s.split("data=")[-1].split("&")[0]
+    if all(c in "0123456789abcdefABCDEF" for c in s) and len(s) % 2 == 0 and len(s) >= 32:
+        return s.lower()
+    try:
+        raw = base64.b64decode(s)
+        if len(raw) == 112:
+            try:
+                raw = _decrypt_mii_qr_bytes(raw)
+            except Exception:
+                pass
+        return raw.hex()
+    except Exception:
+        return s
 
 
 def _decode_qr_image(file_stream) -> bytes:
@@ -130,14 +180,15 @@ def _fetch_mii_png(params: dict) -> bytes:
 def _run_blender_job(job_id: str, glb_path: str, png_path: str,
                      body_type: str, output_stl: str):
     """Run the Blender pipeline in a thread and update JOBS."""
-    with JOBS_LOCK:
-        JOBS[job_id]["status"] = "running"
+    job = _get_job(job_id) or {}
+    job["status"] = "running"
+    _save_job(job_id, job)
 
     blender = _blender_exe()
     if not blender:
-        with JOBS_LOCK:
-            JOBS[job_id]["status"] = "error"
-            JOBS[job_id]["error"] = "Blender not found. Please install Blender."
+        job["status"] = "error"
+        job["error"] = "Blender not found. Please install Blender."
+        _save_job(job_id, job)
         return
 
     script = os.path.join(os.path.dirname(__file__), "printmiiout.py")
@@ -146,8 +197,6 @@ def _run_blender_job(job_id: str, glb_path: str, png_path: str,
         cmd.append(body_type)
 
     env = os.environ.copy()
-    # Pass the PNG path so printmiiout.py can pick it up
-    # We place it next to the GLB as "image.png" - printmiiout already looks there
     try:
         result = subprocess.run(
             cmd,
@@ -158,22 +207,20 @@ def _run_blender_job(job_id: str, glb_path: str, png_path: str,
         if result.returncode != 0:
             raise RuntimeError(result.stderr[-3000:] if result.stderr else "Blender exited with error")
 
-        # printmiiout.py writes <input_basename>.stl next to the GLB
         generated_stl = os.path.splitext(glb_path)[0] + ".stl"
         if not os.path.exists(generated_stl):
             raise RuntimeError("STL was not created by Blender script.")
         shutil.move(generated_stl, output_stl)
 
-        with JOBS_LOCK:
-            JOBS[job_id]["status"] = "done"
-            JOBS[job_id]["file"] = output_stl
-            JOBS[job_id]["log"] = result.stdout[-4000:]
+        job["status"] = "done"
+        job["file"] = output_stl
+        job["log"] = result.stdout[-4000:]
+        _save_job(job_id, job)
     except Exception as exc:
-        with JOBS_LOCK:
-            JOBS[job_id]["status"] = "error"
-            JOBS[job_id]["error"] = str(exc)
+        job["status"] = "error"
+        job["error"] = str(exc)
+        _save_job(job_id, job)
     finally:
-        # Clean up temp GLB & PNG
         for f in (glb_path, png_path):
             try:
                 os.unlink(f)
@@ -225,24 +272,24 @@ def _start_job(form_params: dict, body_type: str) -> str:
     png_data = _fetch_mii_png(form_params)
 
     # Write to temp files
-    tmpdir = tempfile.mkdtemp(prefix="printmiiout_")
-    glb_path = os.path.join(tmpdir, "mii_head.glb")
-    png_path = os.path.join(tmpdir, "image.png")  # printmiiout looks for "image.png" beside GLB
-    out_stl  = os.path.join(tmpdir, "output.stl")
+    job_id = str(uuid.uuid4())
+    jdir = os.path.join(JOBS_DIR, job_id)
+    os.makedirs(jdir, exist_ok=True)
+    glb_path = os.path.join(jdir, "mii_head.glb")
+    png_path = os.path.join(jdir, "image.png")
+    out_stl  = os.path.join(jdir, "output.stl")
 
     with open(glb_path, "wb") as fh:
         fh.write(glb_data)
     with open(png_path, "wb") as fh:
         fh.write(png_data)
 
-    job_id = str(uuid.uuid4())
-    with JOBS_LOCK:
-        JOBS[job_id] = {
-            "status": "queued",
-            "file": None,
-            "error": None,
-            "created": time.time(),
-        }
+    _save_job(job_id, {
+        "status": "queued",
+        "file": out_stl,
+        "error": None,
+        "created": time.time(),
+    })
 
     t = threading.Thread(
         target=_run_blender_job,
@@ -255,17 +302,27 @@ def _start_job(form_params: dict, body_type: str) -> str:
 
 def _cleanup_old_jobs():
     now = time.time()
+    if not os.path.exists(JOBS_DIR):
+        return
     with JOBS_LOCK:
-        stale = [jid for jid, j in JOBS.items()
-                 if now - j.get("created", now) > JOB_TTL]
-        for jid in stale:
-            fpath = JOBS[jid].get("file")
-            if fpath:
-                try:
-                    shutil.rmtree(os.path.dirname(fpath), ignore_errors=True)
-                except Exception:
-                    pass
-            del JOBS[jid]
+        for entry in os.listdir(JOBS_DIR):
+            jdir = os.path.join(JOBS_DIR, entry)
+            jfile = os.path.join(jdir, "job.json")
+            if not os.path.isdir(jdir) or not os.path.exists(jfile):
+                continue
+            try:
+                with open(jfile, "r", encoding="utf-8") as fh:
+                    job = json.load(fh)
+                if now - job.get("created", now) > JOB_TTL:
+                    fpath = job.get("file")
+                    if fpath and os.path.exists(fpath) and job.get("status") == "done":
+                        job["created"] = now
+                        with open(jfile, "w", encoding="utf-8") as fh:
+                            json.dump(job, fh)
+                        continue
+                    shutil.rmtree(jdir, ignore_errors=True)
+            except Exception:
+                pass
 
 
 # ---------------------------------------------------------------------------
@@ -301,21 +358,14 @@ def submit():
         api_params["api_id"] = "1"
 
     elif input_type == "data":
-        # Could be hex/base64 text OR a file upload
         data_text = request.form.get("data_text", "").strip()
         data_file = request.files.get("data_file")
 
         if data_file and data_file.filename:
             raw = data_file.read()
-            if len(raw) in (112, 96):
-                try:
-                    raw = _decrypt_mii_qr_bytes(raw)
-                except Exception:
-                    pass
-            import base64
-            api_params["data"] = base64.b64encode(raw).decode()
+            api_params["data"] = _normalize_mii_data(raw)
         elif data_text:
-            api_params["data"] = data_text
+            api_params["data"] = _normalize_mii_data(data_text)
         else:
             return jsonify(error="No Mii data provided."), 400
 
@@ -360,17 +410,16 @@ def submit():
     except requests.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else 500
         msg = exc.response.text[:500] if exc.response is not None else str(exc)
-        return jsonify(error=f"Mii API error {status}: {msg}"), 502
+        return jsonify(error=f"Mii API error {status}: {msg}"), 400
     except Exception as exc:
-        return jsonify(error=str(exc)), 500
+        return jsonify(error=str(exc)), 400
 
     return jsonify(job_id=job_id)
 
 
 @app.route("/status/<job_id>")
 def status(job_id: str):
-    with JOBS_LOCK:
-        job = JOBS.get(job_id)
+    job = _get_job(job_id)
     if job is None:
         return jsonify(error="Job not found."), 404
     return jsonify(
@@ -381,18 +430,78 @@ def status(job_id: str):
 
 @app.route("/download/<job_id>")
 def download(job_id: str):
-    with JOBS_LOCK:
-        job = JOBS.get(job_id)
+    job = _get_job(job_id)
     if job is None or job["status"] != "done":
         abort(404)
-    fpath = job["file"]
+    fpath = job.get("file")
     if not fpath or not os.path.exists(fpath):
         abort(404)
+
+    jdir = os.path.dirname(fpath)
+    from flask import after_this_request
+
+    @after_this_request
+    def _cleanup(response):
+        try:
+            shutil.rmtree(jdir, ignore_errors=True)
+        except Exception:
+            pass
+        return response
+
     return send_file(
         fpath,
         as_attachment=True,
         download_name="printmiiout.stl",
         mimetype="application/octet-stream",
+    )
+
+
+@app.route("/decode-qr-raw", methods=["POST"])
+def decode_qr_raw():
+    """Accept raw binary QR bytes already extracted client-side by jsQR.
+    Runs AES-CCM decryption and returns the result as base64.
+    This is the primary path for the new client-side QR flow."""
+    qr_raw = request.files.get("qr_raw")
+    if not qr_raw:
+        return jsonify(error="No binary data uploaded."), 400
+    raw_bytes = qr_raw.read()
+    try:
+        decrypted = _decrypt_mii_qr_bytes(raw_bytes)
+    except Exception as exc:
+        return jsonify(error=f"QR decrypt error: {exc}"), 400
+    import base64
+    return jsonify(
+        data=decrypted.hex(),
+        hex=decrypted.hex(),
+        size=len(decrypted),
+    )
+
+
+@app.route("/decode-qr", methods=["POST"])
+def decode_qr():
+    """Server-side QR decode helper.
+    Accepts a raw binary file upload (field name 'qr_file') and returns
+    the decrypted Mii data as hex so the frontend can use it directly.
+    Falls back to returning the raw bytes as hex if decryption fails."""
+    qr_file = request.files.get("qr_file")
+    if not qr_file or not qr_file.filename:
+        return jsonify(error="No file uploaded."), 400
+
+    try:
+        raw_bytes = _decode_qr_image(qr_file)
+    except Exception as exc:
+        return jsonify(error=f"QR scan error: {exc}"), 400
+
+    try:
+        decrypted = _decrypt_mii_qr_bytes(raw_bytes)
+    except Exception as exc:
+        return jsonify(error=f"QR decrypt error: {exc}"), 400
+
+    import base64
+    return jsonify(
+        data=base64.b64encode(decrypted).decode(),
+        hex=decrypted.hex(),
+        size=len(decrypted),
     )
 
 

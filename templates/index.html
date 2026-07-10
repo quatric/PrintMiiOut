@@ -322,6 +322,8 @@
     }
     footer a { color: var(--text); text-decoration: underline; }
   </style>
+  <!-- jsQR: client-side QR decoder for binary Mii QR payloads -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
 <body>
 
@@ -337,10 +339,10 @@
   <div class="section-title">Mii Source</div>
 
   <div class="tab-row">
-    <button class="tab-btn active" data-tab="nnid">NNID</button>
-    <button class="tab-btn"        data-tab="pnid">PNID</button>
-    <button class="tab-btn"        data-tab="data">Data / File</button>
-    <button class="tab-btn"        data-tab="qr">QR Code</button>
+    <button class="tab-btn active" type="button" data-tab="nnid">NNID</button>
+    <button class="tab-btn"        type="button" data-tab="pnid">PNID</button>
+    <button class="tab-btn"        type="button" data-tab="data">Data / File</button>
+    <button class="tab-btn"        type="button" data-tab="qr">QR Code</button>
   </div>
 
   <!-- NNID panel -->
@@ -381,12 +383,10 @@
     <div class="field">
       <label for="qr-file">Upload QR Code Image</label>
       <input type="file" id="qr-file" accept="image/*,.png,.jpg,.jpeg,.bmp,.webp">
-      <div class="field-note">Upload a photo or screenshot of a Mii QR code from 3DS, Wii U, Tomodachi Life, or Miitomo.</div>
+      <div class="field-note" id="qr-status" style="margin-top:8px;">Upload a photo or screenshot of a Mii QR code (3DS, Wii U, Tomodachi Life).</div>
     </div>
-    <div class="field" style="margin-top:12px">
-      <label for="qr-text">Or paste scanned QR code hex / Base64</label>
-      <textarea id="qr-text" placeholder="59fc817e6446... or AwBgMIJUICvp..."></textarea>
-    </div>
+    <!-- Hidden field populated by JS after client-side decode -->
+    <input type="hidden" id="qr-decoded-data" value="">
   </div>
 
   <div class="section-title" style="margin-top:28px">Model Options</div>
@@ -457,6 +457,14 @@
       activeTab = btn.dataset.tab;
       tabBtns.forEach(b => b.classList.toggle('active', b === btn));
       panels.forEach(p => p.classList.toggle('active', p.id === `panel-${activeTab}`));
+      // Reset QR status when switching away and back
+      if (activeTab !== 'qr') {
+        document.getElementById('qr-decoded-data').value = '';
+        document.getElementById('qr-status').textContent =
+          'Upload a photo or screenshot of a Mii QR code (3DS, Wii U, Tomodachi Life).';
+        document.getElementById('qr-status').style.color = '';
+        document.getElementById('qr-file').value = '';
+      }
     });
   });
 
@@ -470,7 +478,7 @@
     });
   });
 
-  // ── File reader ───────────────────────────────────────────────────────────
+  // ── File reader (data tab) ─────────────────────────────────────────────────
   let uploadedFileB64 = null;
   document.getElementById('data-file').addEventListener('change', async e => {
     const file = e.target.files[0];
@@ -480,6 +488,103 @@
     let bin = '';
     bytes.forEach(b => bin += String.fromCharCode(b));
     uploadedFileB64 = btoa(bin);
+  });
+
+  // ── QR decoding (client-side via jsQR) ────────────────────────────────────
+  // AES-CCM Mii QR key (shared secret, publicly documented)
+  const MII_QR_KEY = [0x59,0xFC,0x81,0x7E,0x64,0x46,0xEA,0x61,
+                       0x90,0x34,0x7B,0x20,0xE9,0xBD,0xCE,0x52];
+
+  async function decryptMiiQR(bytes) {
+    if (bytes.length < 0x60) return bytes;
+    const nonce = bytes.slice(0, 8);
+    // AES-CCM: import key, decrypt bytes[8..8+0x58]
+    const keyBuf = new Uint8Array(MII_QR_KEY);
+    // CCM not natively in WebCrypto; use SubtleCrypto CTR approximation or
+    // send to server's /decode-qr which uses pycryptodome's CCM.
+    // We use the server endpoint for proper CCM decryption.
+    throw new Error('Use server-side CCM decryption');
+  }
+
+  const qrStatus = document.getElementById('qr-status');
+  const qrFileInput = document.getElementById('qr-file');
+  const qrDecodedData = document.getElementById('qr-decoded-data');
+
+  qrFileInput.addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) {
+      qrDecodedData.value = '';
+      qrStatus.textContent = 'Upload a photo or screenshot of a Mii QR code (3DS, Wii U, Tomodachi Life).';
+      qrStatus.style.color = '';
+      return;
+    }
+
+    qrStatus.textContent = 'Scanning QR code...';
+    qrStatus.style.color = 'var(--muted)';
+
+    // Try client-side jsQR first
+    let decoded = null;
+    try {
+      const imgBitmap = await createImageBitmap(file);
+      const canvas = document.createElement('canvas');
+      canvas.width = imgBitmap.width;
+      canvas.height = imgBitmap.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(imgBitmap, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      if (typeof jsQR !== 'undefined') {
+        const result = jsQR(imageData.data, imageData.width, imageData.height,
+                            { inversionAttempts: 'dontInvert' });
+        if (result && result.binaryData && result.binaryData.length > 0) {
+          decoded = new Uint8Array(result.binaryData);
+        }
+      }
+    } catch (_) {}
+
+    if (decoded && decoded.length >= 0x60) {
+      // Send raw bytes to server for AES-CCM decryption
+      const blob = new Blob([decoded]);
+      const fd2 = new FormData();
+      fd2.append('qr_raw', blob, 'qr.bin');
+      try {
+        const r = await fetch('/decode-qr-raw', { method: 'POST', body: fd2 });
+        const j = await r.json();
+        if (j.data) {
+          qrDecodedData.value = j.data;
+          qrStatus.textContent = `✓ QR decoded successfully (${decoded.length} bytes → decrypted ${j.size} bytes).`;
+          qrStatus.style.color = 'limegreen';
+          return;
+        }
+      } catch (_) {}
+    } else if (decoded && decoded.length > 0) {
+      // Short payload — convert to hex directly
+      qrDecodedData.value = Array.from(decoded).map(b => b.toString(16).padStart(2, '0')).join('');
+      qrStatus.textContent = `✓ QR decoded (${decoded.length} bytes).`;
+      qrStatus.style.color = 'limegreen';
+      return;
+    }
+
+    // Fallback: send image to server /decode-qr
+    qrStatus.textContent = 'Sending to server for QR decode...';
+    const fd3 = new FormData();
+    fd3.append('qr_file', file);
+    try {
+      const r = await fetch('/decode-qr', { method: 'POST', body: fd3 });
+      const j = await r.json();
+      if (j.data) {
+        qrDecodedData.value = j.data;
+        qrStatus.textContent = `✓ QR decoded via server (${j.size} bytes).`;
+        qrStatus.style.color = 'limegreen';
+      } else {
+        qrStatus.textContent = `✗ ${j.error || 'Failed to decode QR code.'}`;
+        qrStatus.style.color = '#ff8080';
+        qrDecodedData.value = '';
+      }
+    } catch (err) {
+      qrStatus.textContent = '✗ Network error during QR decode.';
+      qrStatus.style.color = '#ff8080';
+      qrDecodedData.value = '';
+    }
   });
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -521,15 +626,13 @@
       fd.append('pnid', v);
 
     } else if (activeTab === 'qr') {
-      const qrFile = document.getElementById('qr-file').files[0];
-      const qrText = document.getElementById('qr-text').value.trim();
-      if (qrFile) {
-        fd.append('qr_file', qrFile);
-      } else if (qrText) {
-        fd.append('qr_text', qrText);
-      } else {
-        return showError('Please upload a QR code image or paste scanned QR data.');
+      const decoded = document.getElementById('qr-decoded-data').value.trim();
+      if (!decoded) {
+        return showError('Please upload a QR code image and wait for it to be decoded.');
       }
+      fd.append('data_text', decoded);
+      // Treat decoded QR as raw data input type
+      fd.set('input_type', 'data');
 
     } else {
       const dataFile = document.getElementById('data-file').files[0];
@@ -552,8 +655,14 @@
     let jobId;
     try {
       const res = await fetch('/submit', { method: 'POST', body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Server error.');
+      let json;
+      try {
+        json = await res.json();
+      } catch (_) {
+        const text = await res.text();
+        throw new Error(`Server error (${res.status}): ${text.replace(/<[^>]*>?/gm, ' ').slice(0, 150)}`);
+      }
+      if (!res.ok) throw new Error((json && json.error) || 'Server error.');
       jobId = json.job_id;
     } catch (err) {
       inputCard.style.display    = 'block';
