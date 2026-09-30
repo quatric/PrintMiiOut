@@ -16,6 +16,29 @@ except ModuleNotFoundError:
     cmd = [blender_exe, "-b", "--python", os.path.abspath(__file__), "--"] + sys.argv[1:]
     sys.exit(subprocess.call(cmd))
 
+# Mask texture noise leaves islands under ~0.35 GLB units²; real features are 1+.
+SPECK_AREA = 0.5
+
+
+def _speck_faces(bm, min_area):
+    seen = set()
+    specks = []
+    for start in bm.faces:
+        if start in seen:
+            continue
+        seen.add(start)
+        island = [start]
+        for face in island:
+            for edge in face.edges:
+                for f in edge.link_faces:
+                    if f not in seen:
+                        seen.add(f)
+                        island.append(f)
+        if sum(f.calc_area() for f in island) < min_area:
+            specks.extend(island)
+    return specks
+
+
 def process_glb(input_glb, output_stl, body_type=None):
     print(f"Processing: {input_glb} -> {output_stl}")
     input_glb = os.path.abspath(input_glb)
@@ -207,7 +230,11 @@ def process_glb(input_glb, output_stl, body_type=None):
                         if faces_to_delete:
                             print(f"Removing {len(faces_to_delete)} / {len(bm.faces)} transparent faces from {obj.name}")
                             bmesh.ops.delete(bm, geom=faces_to_delete, context='FACES')
-                            bm.to_mesh(obj.data)
+                        specks = _speck_faces(bm, SPECK_AREA)
+                        if specks:
+                            print(f"Removing {len(specks)} speck faces from {obj.name}")
+                            bmesh.ops.delete(bm, geom=specks, context='FACES')
+                        bm.to_mesh(obj.data)
                     bm.free()
 
                 sm = obj.modifiers.new(name="Smooth", type='SMOOTH')
@@ -218,9 +245,10 @@ def process_glb(input_glb, output_stl, body_type=None):
                 except Exception as e:
                     print(f"Warning applying Smooth: {e}")
 
+                # Sink 0.5 below the face so features fuse instead of floating on it.
                 solid = obj.modifiers.new(name="Solidify", type='SOLIDIFY')
-                solid.thickness = 1.5
-                solid.offset = 1.0
+                solid.thickness = 2.0
+                solid.offset = 0.5
                 try:
                     bpy.ops.object.modifier_apply(modifier=solid.name)
                 except Exception as e:
