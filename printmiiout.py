@@ -39,7 +39,7 @@ def _speck_faces(bm, min_area):
     return specks
 
 
-def process_glb(input_glb, output_stl, body_type=None):
+def process_glb(input_glb, output_stl, body_type=None, with_base=True):
     print(f"Processing: {input_glb} -> {output_stl}")
     input_glb = os.path.abspath(input_glb)
     output_stl = os.path.abspath(output_stl)
@@ -326,11 +326,12 @@ def process_glb(input_glb, output_stl, body_type=None):
     head_xs = [v.co.x for v in head.data.vertices]
     head_width = max(head_xs) - min(head_xs)
 
+    has_body = False
     if body_type:
         print(f"\n=== Attaching body (type={body_type}) ===")
-        _attach_body(body_type, head)
+        has_body = _attach_body(body_type, head)
 
-    _make_printable(head_width)
+    _make_printable(head_width, with_base=has_body and with_base)
     _export_stl(output_stl)
     print(f"Done: {output_stl}")
 
@@ -344,16 +345,54 @@ def _export_stl(path):
 
 # Sizes below are fractions of head width, so they hold at any import scale.
 VOXEL_SIZE = 1 / 240
+BASE_RADIUS = 0.45
+BASE_HEIGHT = 0.05
+BASE_SINK = 0.025
 MIN_ISLAND = 0.01
 MAX_TRIS = 600_000
 
 
-def _make_printable(unit):
+def _add_base(parts, unit):
+    """A disc under the feet, so a top-heavy Mii prints upright and stays standing."""
+    import bmesh
+    import numpy as np
+    from mathutils import Vector
+
+    pts = []
+    for o in parts:
+        co = np.empty(len(o.data.vertices) * 3)
+        o.data.vertices.foreach_get("co", co)
+        co = co.reshape(-1, 3) @ np.array(o.matrix_world)[:3, :3].T + np.array(o.matrix_world)[:3, 3]
+        pts.append(co)
+    pts = np.concatenate(pts)
+    zmin = pts[:, 2].min()
+    feet = pts[pts[:, 2] < zmin + unit * 0.05]
+    cx, cy = feet[:, 0].mean(), feet[:, 1].mean()
+
+    radius = unit * BASE_RADIUS
+    height = unit * BASE_HEIGHT
+    bm = bmesh.new()
+    # Slight taper hides elephant's foot on the first layers.
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=128,
+                          radius1=radius, radius2=radius * 0.95, depth=height)
+    mesh = bpy.data.meshes.new("Base")
+    bm.to_mesh(mesh)
+    bm.free()
+    base = bpy.data.objects.new("Base", mesh)
+    bpy.context.scene.collection.objects.link(base)
+    base.location = Vector((cx, cy, zmin + unit * BASE_SINK - height / 2))
+    print(f"Base: r={radius:.1f} h={height:.1f} under feet at ({cx:.1f}, {cy:.1f})")
+    return base
+
+
+def _make_printable(unit, with_base):
     """Fuse every shell into one watertight solid, so slicers never have to
     guess at overlaps, gaps or open edges."""
     import bmesh
 
     parts = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+    if with_base:
+        parts.append(_add_base(parts, unit))
 
     bpy.ops.object.select_all(action='DESELECT')
     for o in parts:
@@ -418,7 +457,7 @@ def _make_printable(unit):
 
 def _attach_body(body_type, head):
     """Load the body GLB, apply armature pose, scale/position and close it,
-    overlapping the head so the fuse step joins them."""
+    overlapping the head so the fuse step joins them. Returns False if no body."""
     import bmesh
     import numpy as np
 
@@ -426,7 +465,7 @@ def _attach_body(body_type, head):
     body_glb = os.path.join(script_dir, f"miiBody{'M' if body_type == 'm' else 'F'}_wiiu_plain.glb")
     if not os.path.exists(body_glb):
         print(f"Error: Body model not found: {body_glb}")
-        return
+        return False
 
     head.name = 'Head'
 
@@ -606,12 +645,17 @@ def _attach_body(body_type, head):
         print(f"  {obj.name}: {len(oe)} open edges, {len(bm.faces):,} faces")
         bm.free()
 
+    return True
+
 
 if __name__ == "__main__":
     if "--" in sys.argv:
         args = sys.argv[sys.argv.index("--") + 1:]
     else:
         args = sys.argv[1:]
+
+    with_base = "--no-base" not in args
+    args = [a for a in args if a != "--no-base"]
 
     # Check if last arg is body type (m or f)
     body_type = None
@@ -646,4 +690,4 @@ if __name__ == "__main__":
 
     for input_glb in targets:
         output_stl = os.path.splitext(input_glb)[0] + ".stl"
-        process_glb(input_glb, output_stl, body_type=body_type)
+        process_glb(input_glb, output_stl, body_type=body_type, with_base=with_base)
