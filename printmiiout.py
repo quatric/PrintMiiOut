@@ -321,25 +321,104 @@ def process_glb(input_glb, output_stl, body_type=None):
         print(f"Final open edges after merge+weld: {len(remaining_open)}")
         bm_check.free()
 
-    # --- Export head-only STL first ---
-    head_stl = output_stl
-    try:
-        bpy.ops.export_mesh.stl(filepath=head_stl)
-    except (AttributeError, RuntimeError):
-        bpy.ops.wm.stl_export(filepath=head_stl)
+    head = opaque_objs[0]
+    # dimensions would still report the pre-merge faceline bounds here.
+    head_xs = [v.co.x for v in head.data.vertices]
+    head_width = max(head_xs) - min(head_xs)
 
-    # --- Attach body if body_type specified ---
     if body_type:
         print(f"\n=== Attaching body (type={body_type}) ===")
-        # opaque_objs[0] is our fully processed head
-        _attach_body(body_type, opaque_objs[0], output_stl)
-    
+        _attach_body(body_type, head)
+
+    _make_printable(head_width)
+    _export_stl(output_stl)
     print(f"Done: {output_stl}")
 
 
-def _attach_body(body_type, head, output_stl):
-    """Load the body GLB, apply armature pose, scale/position,
-    close each shell independently, and export as overlapping manifolds."""
+def _export_stl(path):
+    try:
+        bpy.ops.export_mesh.stl(filepath=path)
+    except (AttributeError, RuntimeError):
+        bpy.ops.wm.stl_export(filepath=path)
+
+
+# Sizes below are fractions of head width, so they hold at any import scale.
+VOXEL_SIZE = 1 / 240
+MIN_ISLAND = 0.01
+MAX_TRIS = 600_000
+
+
+def _make_printable(unit):
+    """Fuse every shell into one watertight solid, so slicers never have to
+    guess at overlaps, gaps or open edges."""
+    import bmesh
+
+    parts = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in parts:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = parts[0]
+    bpy.ops.object.join()
+    solid = bpy.context.view_layer.objects.active
+    solid.name = "PrintMiiOut"
+
+    remesh = solid.modifiers.new("Fuse", type='REMESH')
+    remesh.mode = 'VOXEL'
+    remesh.voxel_size = unit * VOXEL_SIZE
+    remesh.adaptivity = 0.0
+    bpy.ops.object.modifier_apply(modifier=remesh.name)
+
+    # Voxels leave a stair-step on feature edges; two passes sand it off.
+    sand = solid.modifiers.new("Sand", type='SMOOTH')
+    sand.factor = 0.5
+    sand.iterations = 2
+    bpy.ops.object.modifier_apply(modifier=sand.name)
+
+    # Specks left over from the texture emboss would print as loose blobs.
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.separate(type='LOOSE')
+    bpy.ops.object.mode_set(mode='OBJECT')
+    islands = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+    volumes = {}
+    for o in islands:
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        volumes[o] = abs(bm.calc_volume())
+        bm.free()
+    biggest = max(volumes.values())
+    keep = [o for o in islands if volumes[o] >= biggest * MIN_ISLAND]
+    for o in islands:
+        if o not in keep:
+            bpy.data.objects.remove(o, do_unlink=True)
+    print(f"Fused into {len(keep)} solid(s), dropped {len(islands) - len(keep)} specks")
+
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in keep:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = keep[0]
+    if len(keep) > 1:
+        bpy.ops.object.join()
+    solid = bpy.context.view_layer.objects.active
+
+    tris = sum(len(p.vertices) - 2 for p in solid.data.polygons)
+    if tris > MAX_TRIS:
+        slim = solid.modifiers.new("Slim", type='DECIMATE')
+        slim.ratio = MAX_TRIS / tris
+        slim.use_collapse_triangulate = True
+        bpy.ops.object.modifier_apply(modifier=slim.name)
+
+    bm = bmesh.new()
+    bm.from_mesh(solid.data)
+    open_e = sum(1 for e in bm.edges if not e.is_manifold)
+    print(f"Printable: {len(bm.faces):,} faces, {open_e} non-manifold edges")
+    bm.free()
+
+
+def _attach_body(body_type, head):
+    """Load the body GLB, apply armature pose, scale/position and close it,
+    overlapping the head so the fuse step joins them."""
     import bmesh
     import numpy as np
 
@@ -526,12 +605,6 @@ def _attach_body(body_type, head, output_stl):
         oe = [e for e in bm.edges if e.is_boundary]
         print(f"  {obj.name}: {len(oe)} open edges, {len(bm.faces):,} faces")
         bm.free()
-
-    # Export both closed shells in one STL (slicer unions overlapping shells)
-    try:
-        bpy.ops.export_mesh.stl(filepath=output_stl)
-    except (AttributeError, RuntimeError):
-        bpy.ops.wm.stl_export(filepath=output_stl)
 
 
 if __name__ == "__main__":
