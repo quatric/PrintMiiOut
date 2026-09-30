@@ -16,7 +16,30 @@ except ModuleNotFoundError:
     cmd = [blender_exe, "-b", "--python", os.path.abspath(__file__), "--"] + sys.argv[1:]
     sys.exit(subprocess.call(cmd))
 
-def process_glb(input_glb, output_stl, body_type=None):
+# Mask texture noise leaves islands under ~0.35 GLB units²; real features are 1+.
+SPECK_AREA = 0.5
+
+
+def _speck_faces(bm, min_area):
+    seen = set()
+    specks = []
+    for start in bm.faces:
+        if start in seen:
+            continue
+        seen.add(start)
+        island = [start]
+        for face in island:
+            for edge in face.edges:
+                for f in edge.link_faces:
+                    if f not in seen:
+                        seen.add(f)
+                        island.append(f)
+        if sum(f.calc_area() for f in island) < min_area:
+            specks.extend(island)
+    return specks
+
+
+def process_glb(input_glb, output_stl, body_type=None, with_base=True):
     print(f"Processing: {input_glb} -> {output_stl}")
     input_glb = os.path.abspath(input_glb)
     output_stl = os.path.abspath(output_stl)
@@ -207,7 +230,11 @@ def process_glb(input_glb, output_stl, body_type=None):
                         if faces_to_delete:
                             print(f"Removing {len(faces_to_delete)} / {len(bm.faces)} transparent faces from {obj.name}")
                             bmesh.ops.delete(bm, geom=faces_to_delete, context='FACES')
-                            bm.to_mesh(obj.data)
+                        specks = _speck_faces(bm, SPECK_AREA)
+                        if specks:
+                            print(f"Removing {len(specks)} speck faces from {obj.name}")
+                            bmesh.ops.delete(bm, geom=specks, context='FACES')
+                        bm.to_mesh(obj.data)
                     bm.free()
 
                 sm = obj.modifiers.new(name="Smooth", type='SMOOTH')
@@ -218,9 +245,10 @@ def process_glb(input_glb, output_stl, body_type=None):
                 except Exception as e:
                     print(f"Warning applying Smooth: {e}")
 
+                # Sink 0.5 below the face so features fuse instead of floating on it.
                 solid = obj.modifiers.new(name="Solidify", type='SOLIDIFY')
-                solid.thickness = 1.5
-                solid.offset = 1.0
+                solid.thickness = 2.0
+                solid.offset = 0.5
                 try:
                     bpy.ops.object.modifier_apply(modifier=solid.name)
                 except Exception as e:
@@ -293,25 +321,144 @@ def process_glb(input_glb, output_stl, body_type=None):
         print(f"Final open edges after merge+weld: {len(remaining_open)}")
         bm_check.free()
 
-    # --- Export head-only STL first ---
-    head_stl = output_stl
-    try:
-        bpy.ops.export_mesh.stl(filepath=head_stl)
-    except (AttributeError, RuntimeError):
-        bpy.ops.wm.stl_export(filepath=head_stl)
+    head = opaque_objs[0]
+    # dimensions would still report the pre-merge faceline bounds here.
+    head_xs = [v.co.x for v in head.data.vertices]
+    head_width = max(head_xs) - min(head_xs)
 
-    # --- Attach body if body_type specified ---
+    has_body = False
     if body_type:
         print(f"\n=== Attaching body (type={body_type}) ===")
-        # opaque_objs[0] is our fully processed head
-        _attach_body(body_type, opaque_objs[0], output_stl)
-    
+        has_body = _attach_body(body_type, head)
+
+    _make_printable(head_width, with_base=has_body and with_base)
+    _export_stl(output_stl)
     print(f"Done: {output_stl}")
 
 
-def _attach_body(body_type, head, output_stl):
-    """Load the body GLB, apply armature pose, scale/position,
-    close each shell independently, and export as overlapping manifolds."""
+def _export_stl(path):
+    try:
+        bpy.ops.export_mesh.stl(filepath=path)
+    except (AttributeError, RuntimeError):
+        bpy.ops.wm.stl_export(filepath=path)
+
+
+# Sizes below are fractions of head width, so they hold at any import scale.
+VOXEL_SIZE = 1 / 240
+BASE_RADIUS = 0.45
+BASE_HEIGHT = 0.05
+BASE_SINK = 0.025
+BODY_THICKEN = 0.006
+MIN_ISLAND = 0.01
+MAX_TRIS = 600_000
+
+
+def _add_base(parts, unit):
+    """A disc under the feet, so a top-heavy Mii prints upright and stays standing."""
+    import bmesh
+    import numpy as np
+    from mathutils import Vector
+
+    pts = []
+    for o in parts:
+        co = np.empty(len(o.data.vertices) * 3)
+        o.data.vertices.foreach_get("co", co)
+        co = co.reshape(-1, 3) @ np.array(o.matrix_world)[:3, :3].T + np.array(o.matrix_world)[:3, 3]
+        pts.append(co)
+    pts = np.concatenate(pts)
+    zmin = pts[:, 2].min()
+    feet = pts[pts[:, 2] < zmin + unit * 0.05]
+    cx, cy = feet[:, 0].mean(), feet[:, 1].mean()
+
+    radius = unit * BASE_RADIUS
+    height = unit * BASE_HEIGHT
+    bm = bmesh.new()
+    # Slight taper hides elephant's foot on the first layers.
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=128,
+                          radius1=radius, radius2=radius * 0.95, depth=height)
+    mesh = bpy.data.meshes.new("Base")
+    bm.to_mesh(mesh)
+    bm.free()
+    base = bpy.data.objects.new("Base", mesh)
+    bpy.context.scene.collection.objects.link(base)
+    base.location = Vector((cx, cy, zmin + unit * BASE_SINK - height / 2))
+    print(f"Base: r={radius:.1f} h={height:.1f} under feet at ({cx:.1f}, {cy:.1f})")
+    return base
+
+
+def _make_printable(unit, with_base):
+    """Fuse every shell into one watertight solid, so slicers never have to
+    guess at overlaps, gaps or open edges."""
+    import bmesh
+
+    parts = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+    if with_base:
+        parts.append(_add_base(parts, unit))
+
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in parts:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = parts[0]
+    bpy.ops.object.join()
+    solid = bpy.context.view_layer.objects.active
+    solid.name = "PrintMiiOut"
+
+    remesh = solid.modifiers.new("Fuse", type='REMESH')
+    remesh.mode = 'VOXEL'
+    remesh.voxel_size = unit * VOXEL_SIZE
+    remesh.adaptivity = 0.0
+    bpy.ops.object.modifier_apply(modifier=remesh.name)
+
+    # Voxels leave a stair-step on feature edges; two passes sand it off.
+    sand = solid.modifiers.new("Sand", type='SMOOTH')
+    sand.factor = 0.5
+    sand.iterations = 2
+    bpy.ops.object.modifier_apply(modifier=sand.name)
+
+    # Specks left over from the texture emboss would print as loose blobs.
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.separate(type='LOOSE')
+    bpy.ops.object.mode_set(mode='OBJECT')
+    islands = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+    volumes = {}
+    for o in islands:
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        volumes[o] = abs(bm.calc_volume())
+        bm.free()
+    biggest = max(volumes.values())
+    keep = [o for o in islands if volumes[o] >= biggest * MIN_ISLAND]
+    for o in islands:
+        if o not in keep:
+            bpy.data.objects.remove(o, do_unlink=True)
+    print(f"Fused into {len(keep)} solid(s), dropped {len(islands) - len(keep)} specks")
+
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in keep:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = keep[0]
+    if len(keep) > 1:
+        bpy.ops.object.join()
+    solid = bpy.context.view_layer.objects.active
+
+    tris = sum(len(p.vertices) - 2 for p in solid.data.polygons)
+    if tris > MAX_TRIS:
+        slim = solid.modifiers.new("Slim", type='DECIMATE')
+        slim.ratio = MAX_TRIS / tris
+        slim.use_collapse_triangulate = True
+        bpy.ops.object.modifier_apply(modifier=slim.name)
+
+    bm = bmesh.new()
+    bm.from_mesh(solid.data)
+    open_e = sum(1 for e in bm.edges if not e.is_manifold)
+    print(f"Printable: {len(bm.faces):,} faces, {open_e} non-manifold edges")
+    bm.free()
+
+
+def _attach_body(body_type, head):
+    """Load the body GLB, apply armature pose, scale/position and close it,
+    overlapping the head so the fuse step joins them. Returns False if no body."""
     import bmesh
     import numpy as np
 
@@ -319,7 +466,7 @@ def _attach_body(body_type, head, output_stl):
     body_glb = os.path.join(script_dir, f"miiBody{'M' if body_type == 'm' else 'F'}_wiiu_plain.glb")
     if not os.path.exists(body_glb):
         print(f"Error: Body model not found: {body_glb}")
-        return
+        return False
 
     head.name = 'Head'
 
@@ -499,11 +646,13 @@ def _attach_body(body_type, head, output_stl):
         print(f"  {obj.name}: {len(oe)} open edges, {len(bm.faces):,} faces")
         bm.free()
 
-    # Export both closed shells in one STL (slicer unions overlapping shells)
-    try:
-        bpy.ops.export_mesh.stl(filepath=output_stl)
-    except (AttributeError, RuntimeError):
-        bpy.ops.wm.stl_export(filepath=output_stl)
+    # Thin ankles, wrists and the skirt hem snap once the figure is scaled down.
+    thicken = body_objs[0].modifiers.new('Thicken', type='DISPLACE')
+    thicken.mid_level = 0.0
+    thicken.strength = head_width * BODY_THICKEN
+    bpy.context.view_layer.objects.active = body_objs[0]
+    bpy.ops.object.modifier_apply(modifier=thicken.name)
+    return True
 
 
 if __name__ == "__main__":
@@ -511,6 +660,9 @@ if __name__ == "__main__":
         args = sys.argv[sys.argv.index("--") + 1:]
     else:
         args = sys.argv[1:]
+
+    with_base = "--no-base" not in args
+    args = [a for a in args if a != "--no-base"]
 
     # Check if last arg is body type (m or f)
     body_type = None
@@ -545,4 +697,4 @@ if __name__ == "__main__":
 
     for input_glb in targets:
         output_stl = os.path.splitext(input_glb)[0] + ".stl"
-        process_glb(input_glb, output_stl, body_type=body_type)
+        process_glb(input_glb, output_stl, body_type=body_type, with_base=with_base)
