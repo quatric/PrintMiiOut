@@ -118,6 +118,10 @@
 
     .post { padding: 20px 22px 22px; }
     .post-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .avatar { width: 48px; height: 48px; flex: none; overflow: hidden; background: var(--page); outline: 3px solid var(--ink); }
+    /* Renders use Mii Studio's face framing; this shows the same head crop as the favicon */
+    .avatar img { display: block; width: 67px; height: 67px; max-width: none; margin: -10px 0 0 -9.5px; transition: opacity 0.2s; }
+    .avatar img.loading { opacity: 0.4; }
     .who { font-family: var(--pixel); font-weight: 700; font-size: 1.15rem; line-height: 1.1; }
     .when { font-size: 0.8rem; color: var(--soft); }
     .say {
@@ -323,7 +327,8 @@
     <form id="input-card" onsubmit="return false;" style="display:grid;gap:30px">
       <article class="px post">
         <div class="post-head">
-          <div><p class="who">PrintMiiOut</p><p class="when">just now</p></div>
+          <span class="avatar"><img id="avatar-who" src="{{ url_for('static', filename='mii-face.webp') }}" alt="" width="67" height="67"></span>
+          <div><p class="who">PrintMiiOut</p><p class="when" id="who-line" aria-live="polite">just now</p></div>
         </div>
         <p class="say">Who are we printing today?</p>
 
@@ -381,6 +386,7 @@
 
       <article class="px post">
         <div class="post-head">
+          <span class="avatar"><img class="avatar-look" src="{{ url_for('static', filename='mii-face.webp') }}" alt="" width="67" height="67"></span>
           <div><p class="who">PrintMiiOut</p><p class="when">just now</p></div>
         </div>
         <p class="say">How should they look?</p>
@@ -426,6 +432,7 @@
     <!-- Progress card -->
     <article class="px post" id="progress-card" hidden>
       <div class="post-head">
+        <span class="avatar"><img class="avatar-look" src="{{ url_for('static', filename='mii-face.webp') }}" alt="" width="67" height="67"></span>
         <div><p class="who">PrintMiiOut</p><p class="when">working…</p></div>
       </div>
       <p class="say">Printing takes a minute. Draw something while you wait!</p>
@@ -448,6 +455,7 @@
     <!-- Result card -->
     <article class="px post" id="result-card" hidden>
       <div class="post-head">
+        <span class="avatar"><img class="avatar-look" src="{{ url_for('static', filename='mii-face.webp') }}" alt="" width="67" height="67"></span>
         <div><p class="who">PrintMiiOut</p><p class="when">just now</p></div>
       </div>
       <p class="say">Your Mii is ready!</p>
@@ -763,6 +771,92 @@
   }
   fillCrowd();
   addEventListener('resize', fillCrowd);
+
+  // ── Live avatars: your Mii's headshot, then the expression you pick ───────
+  // Mii Studio's render URL format, which mii-unsecure also answers for any data.
+  const MII_API = 'https://mii-unsecure.ariankordi.net';
+  const avatarWho = document.getElementById('avatar-who');
+  const avatarsLook = document.querySelectorAll('.avatar-look');
+  const whoLine = document.getElementById('who-line');
+  const expressionSelect = document.getElementById('expression');
+  const placeholder = avatarWho.getAttribute('src');
+  let miiData = null;
+  let lookupId = 0;
+
+  function renderUrl(expression) {
+    const q = new URLSearchParams({ data: miiData, type: 'face', expression, width: '144' });
+    return `${MII_API}/miis/image.png?${q}`;
+  }
+
+  function showAvatar(img, src) {
+    if (img.getAttribute('src') === src) return;
+    img.classList.add('loading');
+    img.src = src;
+  }
+  [avatarWho, ...avatarsLook].forEach(img => {
+    img.addEventListener('load', () => img.classList.remove('loading'));
+    img.addEventListener('error', () => {
+      img.classList.remove('loading');
+      if (img.getAttribute('src') !== placeholder) img.src = placeholder;
+    });
+  });
+
+  function paintAvatars() {
+    showAvatar(avatarWho, miiData ? renderUrl('normal') : placeholder);
+    avatarsLook.forEach(img => showAvatar(img, miiData ? renderUrl(expressionSelect.value) : placeholder));
+  }
+
+  function pastedData(text) {
+    const m = text.match(/[?&]data=([^&\s]+)/);
+    return m ? decodeURIComponent(m[1]) : text.replace(/\s+/g, '');
+  }
+
+  async function lookUpMii() {
+    const id = ++lookupId;
+    let data = null;
+    let line = 'just now';
+    try {
+      if (activeTab === 'nnid' || activeTab === 'pnid') {
+        const name = document.getElementById(`${activeTab}-input`).value.trim();
+        if (name) {
+          const url = `${MII_API}/mii_data/${encodeURIComponent(name)}` + (activeTab === 'pnid' ? '?api_id=1' : '');
+          const res = await fetch(url);
+          if (res.ok) {
+            const json = await res.json();
+            data = json.studio_url_data || json.data;
+            line = `Found ${json.name}!`;
+          } else {
+            line = 'No Mii found for that ID';
+          }
+        }
+      } else if (activeTab === 'data') {
+        const file = document.getElementById('data-file').files[0];
+        const text = document.getElementById('data-text').value.trim();
+        if (file) data = btoa(String.fromCharCode(...new Uint8Array(await file.arrayBuffer())));
+        else if (text) data = pastedData(text);
+      } else if (activeTab === 'qr') {
+        data = qrDecodedData.value || null;
+      }
+    } catch (_) {
+      line = "Couldn't reach the Mii lookup";
+    }
+    if (id !== lookupId) return;
+    miiData = data;
+    whoLine.textContent = line;
+    paintAvatars();
+  }
+
+  let lookupTimer = null;
+  function lookUpSoon() {
+    clearTimeout(lookupTimer);
+    lookupTimer = setTimeout(lookUpMii, 500);
+  }
+  ['nnid-input', 'pnid-input', 'data-text'].forEach(id => document.getElementById(id).addEventListener('input', lookUpSoon));
+  document.getElementById('data-file').addEventListener('change', lookUpMii);
+  tabBtns.forEach(btn => btn.addEventListener('click', lookUpMii));
+  new MutationObserver(lookUpMii).observe(qrStatus, { attributes: true, attributeFilter: ['data-state'] });
+  expressionSelect.addEventListener('change', paintAvatars);
+  lookUpMii();
 
   // ── Doodle canvas (1-bit, 320×120 like a handwritten post) ───────────────
   const doodle = document.getElementById('doodle');
