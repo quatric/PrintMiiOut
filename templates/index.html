@@ -96,6 +96,13 @@
       letter-spacing: 0.01em;
     }
     .tagline { margin: 10px 0 18px; color: var(--soft); max-width: 44ch; }
+    /* Official Miis stroll left forever; JS clones the set to cover wide screens */
+    .crowd { overflow: hidden; margin-top: 4px; }
+    .crowd-track { display: flex; width: max-content; animation: stroll var(--stroll-time, 48s) linear infinite; }
+    .crowd-set { display: flex; gap: 18px; padding-right: 18px; }
+    .crowd img { display: block; width: 88px; height: 88px; }
+    .crowd:hover .crowd-track { animation-play-state: paused; }
+    @keyframes stroll { to { transform: translateX(var(--stroll-shift, -50%)); } }
 
     /* ---- Board layout ---- */
     .board {
@@ -276,12 +283,14 @@
       .top-inner { padding-top: 28px; gap: 14px; }
       .top-inner { justify-content: center; text-align: center; }
       .tagline { margin-inline: auto; }
+      .crowd img { width: 64px; height: 64px; }
       .say { font-size: 1.35rem; }
       .options { grid-template-columns: 1fr; }
       .post { padding: 16px; }
       .btn-submit { width: calc(100% - 6px); justify-content: center; }
     }
     @media (prefers-reduced-motion: reduce) {
+      .crowd-track { animation: none; }
       *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
     }
   </style>
@@ -295,6 +304,15 @@
     <div>
       <h1>PrintMiiOut</h1>
       <p class="tagline">Turn any Mii into a 3D-printable STL. Bring an NNID, a PNID, a Mii file or a QR code.</p>
+    </div>
+  </div>
+  <div class="crowd" aria-hidden="true">
+    <div class="crowd-track" id="crowd-track">
+      <div class="crowd-set">
+        {%- for n in range(1, 26) %}
+        <img src="{{ url_for('static', filename='miis/%02d.webp'|format(n)) }}" alt="" width="88" height="88">
+        {%- endfor %}
+      </div>
     </div>
   </div>
 </header>
@@ -730,6 +748,21 @@
     document.getElementById('data-file').value = '';
     document.getElementById('data-text').value = '';
   });
+
+  // ── Official Miis stroll along the header ─────────────────────────────────
+  const track = document.getElementById('crowd-track');
+  const firstSet = track.firstElementChild;
+  function fillCrowd() {
+    const setWidth = firstSet.getBoundingClientRect().width;
+    while (track.children.length * setWidth < innerWidth + setWidth) {
+      track.appendChild(firstSet.cloneNode(true));
+    }
+    // Shifting by exactly one set makes the loop seamless; 22 px/s keeps it a stroll.
+    track.style.setProperty('--stroll-shift', `-${setWidth}px`);
+    track.style.setProperty('--stroll-time', `${setWidth / 22}s`);
+  }
+  fillCrowd();
+  addEventListener('resize', fillCrowd);
 
   // ── Doodle canvas (1-bit, 320×120 like a handwritten post) ───────────────
   const doodle = document.getElementById('doodle');
