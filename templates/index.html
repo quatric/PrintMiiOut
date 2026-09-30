@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PrintMiiOut - 3D Print Your Mii</title>
+  <meta name="theme-color" content="#f6f5ef">
+  <meta name="color-scheme" content="light">
   <link rel="icon" href="{{ url_for('static', filename='favicon-32.png') }}" sizes="32x32" type="image/png">
   <link rel="icon" href="{{ url_for('static', filename='favicon-192.png') }}" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
@@ -24,466 +26,479 @@
       font-style: normal;
       font-display: swap;
     }
+    @font-face {
+      font-family: 'Pixelify Sans';
+      src: url("{{ url_for('static', filename='fonts/PixelifySans.woff2') }}") format('woff2');
+      font-weight: 400 700;
+      font-display: swap;
+    }
 
     :root {
-      --bg: #18181b;
-      --surface: #27272a;
-      --surface-input: #3f3f46;
-      --border: #52525b;
-      --primary: #e60012;
-      --primary-hover: #cc0010;
-      --text: #f4f4f5;
-      --muted: #a1a1aa;
-      --radius: 8px;
+      --page: #f6f5ef;
+      --card: #ffffff;
+      --ink: #141414;
+      --soft: #5a5a55;
+      --leaf: #8fd14f;
+      --leaf-ink: #141414;
+      --yeah: #3f8a0f;
+      --yeah-wash: #eef8e2;
+      --dither: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='2' shape-rendering='crispEdges'%3E%3Crect width='1' height='1' fill='%23141414'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%23141414'/%3E%3C/svg%3E");
+      --pixel: 'Pixelify Sans', ui-monospace, monospace;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    [hidden] { display: none !important; }
 
     body {
       font-family: 'Rodin NTLG', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      font-weight: 600;
+      background: var(--page);
+      color: var(--ink);
       line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* Pixel box: notched corners from four hard shadows, plus a dithered drop */
+    .px {
+      position: relative;
+      background: var(--card);
+      box-shadow: 0 -3px 0 0 var(--ink), 0 3px 0 0 var(--ink), -3px 0 0 0 var(--ink), 3px 0 0 0 var(--ink);
+      margin: 3px;
+    }
+    .px::after {
+      content: "";
+      position: absolute;
+      inset: 6px -9px -9px 6px;
+      background: var(--dither) 0 0 / 4px 4px;
+      image-rendering: pixelated;
+      z-index: -1;
     }
 
     /* ---- Header ---- */
-    header {
-      width: 100%;
-      padding: 48px 24px 32px;
-      text-align: center;
-      border-bottom: 1px solid var(--surface);
-      margin-bottom: 32px;
+    .top {
+      border-bottom: 3px solid var(--ink);
+      background: var(--card);
+      overflow: hidden;
     }
-
-    h1 {
-      font-size: 2.2rem;
-      font-weight: 700;
-      color: var(--text);
-      margin-bottom: 8px;
-      letter-spacing: -0.02em;
-    }
-
-    .tagline {
-      font-size: 1rem;
-      color: var(--muted);
-      max-width: 560px;
+    .top-inner {
+      max-width: 1000px;
       margin: 0 auto;
+      padding: 44px 16px 0;
+      display: flex;
+      align-items: flex-end;
+      gap: 22px;
     }
-
-    /* ---- Cards ---- */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 28px;
-      width: 100%;
-      max-width: 640px;
-      margin: 0 24px 24px;
+    h1 {
+      font-family: var(--pixel);
+      font-weight: 700;
+      font-size: clamp(2.6rem, 7vw, 4.6rem);
+      line-height: 0.9;
+      letter-spacing: 0.01em;
     }
+    .tagline { margin: 10px 0 18px; color: var(--soft); max-width: 44ch; }
 
-    .section-title {
-      font-size: 0.85rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--muted);
+    /* ---- Board layout ---- */
+    .board {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 40px 16px 64px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      gap: 44px;
+      align-items: start;
+    }
+    .feed { display: grid; gap: 30px; }
+
+    .post { padding: 20px 22px 22px; }
+    .post-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .who { font-family: var(--pixel); font-weight: 700; font-size: 1.15rem; line-height: 1.1; }
+    .when { font-size: 0.8rem; color: var(--soft); }
+    .say {
+      font-family: var(--pixel);
+      font-size: 1.6rem;
+      line-height: 1.15;
       margin-bottom: 16px;
     }
 
-    /* ---- Tab switcher ---- */
-    .tab-row {
-      display: flex;
-      gap: 4px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 4px;
-      margin-bottom: 20px;
-    }
-
-    .tab-btn {
-      flex: 1;
-      padding: 8px 12px;
+    .tab-row { display: flex; flex-wrap: wrap; gap: 12px; margin: 4px 3px 18px; }
+    .tab-btn, .gender-btn {
+      font-family: var(--pixel);
+      font-size: 1.05rem;
+      background: var(--card);
+      color: var(--ink);
       border: none;
-      border-radius: 4px;
-      background: transparent;
-      color: var(--muted);
-      font-family: inherit;
-      font-size: 0.9rem;
-      font-weight: 500;
+      padding: 7px 14px;
+      box-shadow: 0 -2px 0 0 var(--ink), 0 2px 0 0 var(--ink), -2px 0 0 0 var(--ink), 2px 0 0 0 var(--ink);
       cursor: pointer;
-      transition: background 0.15s, color 0.15s;
     }
+    .tab-btn:hover:not(.active), .gender-btn:hover:not(.selected) { background: var(--page); }
+    .tab-btn.active, .gender-btn.selected { background: var(--ink); color: var(--card); }
 
-    .tab-btn.active {
-      background: var(--surface-input);
-      color: var(--text);
-      font-weight: 600;
-    }
-
-    .tab-btn:hover:not(.active) {
-      color: var(--text);
-    }
-
-    /* ---- Input panel ---- */
     .panel { display: none; }
     .panel.active { display: block; }
-
-    label {
-      display: block;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--text);
-      margin-bottom: 6px;
-    }
-
-    input[type="text"],
-    input[type="file"],
-    textarea,
-    select {
-      width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 10px 12px;
-      color: var(--text);
-      font-family: inherit;
-      font-size: 0.95rem;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-
-    input[type="text"]:focus,
-    textarea:focus,
-    select:focus {
-      border-color: var(--primary);
-    }
-
-    textarea {
-      min-height: 80px;
-      resize: vertical;
-      font-family: monospace;
-      font-size: 0.85rem;
-    }
-
-    input[type="file"] {
-      cursor: pointer;
-    }
-
     .field + .field { margin-top: 16px; }
-    .field-note {
-      font-size: 0.8rem;
-      color: var(--muted);
-      margin-top: 4px;
+    label, .label { display: block; font-weight: 700; margin-bottom: 6px; }
+    input[type="text"], input[type="file"], textarea, select {
+      width: 100%;
+      background: var(--card);
+      border: 3px solid var(--ink);
+      border-radius: 0;
+      padding: 10px 12px;
+      color: var(--ink);
+      font: inherit;
+      font-size: 1rem;
     }
-
+    input[type="file"] { padding: 8px; cursor: pointer; }
+    input[type="file"]::file-selector-button {
+      font-family: var(--pixel);
+      font-size: 1rem;
+      border: none;
+      background: var(--ink);
+      color: var(--card);
+      padding: 4px 12px;
+      margin-right: 10px;
+      cursor: pointer;
+    }
+    textarea { min-height: 84px; resize: vertical; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.86rem; }
     select {
-      height: 42px;
-    }
-
-    /* ---- Options grid ---- */
-    .options-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      align-items: flex-end;
-    }
-
-    @media (max-width: 480px) {
-      .options-grid { grid-template-columns: 1fr; }
-    }
-
-    /* ---- Body gender toggle ---- */
-    .gender-row {
-      display: flex;
-      gap: 6px;
-      height: 42px;
-    }
-
-    .gender-btn {
-      flex: 1;
-      height: 100%;
-      padding: 0 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      background: var(--bg);
-      color: var(--muted);
-      font-family: inherit;
-      font-size: 0.9rem;
-      font-weight: 500;
+      appearance: none;
       cursor: pointer;
-      transition: all 0.15s;
-      text-align: center;
+      padding-right: 40px;
+      background-image: linear-gradient(var(--ink), var(--ink)), linear-gradient(var(--ink), var(--ink)), linear-gradient(var(--ink), var(--ink));
+      background-size: 15px 3px, 9px 3px, 3px 3px;
+      background-position: right 14px top calc(50% - 4.5px), right 17px top calc(50% - 1.5px), right 20px top calc(50% + 1.5px);
+      background-repeat: no-repeat;
     }
+    select option { background: var(--card); color: var(--ink); }
+    :focus-visible { outline: 3px dashed var(--leaf); outline-offset: 4px; }
+    input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid var(--leaf); outline-offset: 0; }
 
-    .gender-btn.selected {
-      border-color: var(--primary);
-      color: var(--text);
-      background: var(--surface-input);
-      font-weight: 600;
-    }
+    .field-note { font-size: 0.84rem; color: var(--soft); margin-top: 6px; }
+    #qr-status[data-state="ok"] { color: var(--ink); }
+    #qr-status[data-state="ok"]::before { content: ""; display: inline-block; width: 10px; height: 10px; background: var(--leaf); margin-right: 8px; box-shadow: 0 0 0 2px var(--ink); }
+    #qr-status[data-state="error"] { color: var(--ink); text-decoration: underline wavy; text-underline-offset: 4px; }
 
-    /* ---- Submit ---- */
-    .btn-submit {
-      width: 100%;
-      margin-top: 24px;
-      padding: 12px;
-      background: var(--primary);
-      border: none;
-      border-radius: 4px;
-      color: #ffffff;
-      font-family: inherit;
-      font-size: 0.95rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
+    .options { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .gender-row { display: flex; gap: 12px; flex-wrap: wrap; padding: 3px; }
 
-    .btn-submit:hover:not(:disabled) { background: var(--primary-hover); }
-    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    /* ---- Progress card ---- */
-    #progress-card { display: none; }
-
-    .progress-bar-wrap {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      height: 12px;
-      overflow: hidden;
-      margin: 16px 0;
-    }
-
-    .progress-bar {
-      height: 100%;
-      background: var(--primary);
-      width: 0%;
-      transition: width 0.3s ease;
-    }
-
-    .progress-bar.indeterminate {
-      width: 40%;
-      animation: indeterminate-slide 1.5s infinite linear;
-    }
-
-    @keyframes indeterminate-slide {
-      0%   { transform: translateX(-100%); }
-      100% { transform: translateX(300%); }
-    }
-
-    .status-text {
-      font-size: 0.9rem;
-      color: var(--muted);
-    }
-
-    /* ---- Result ---- */
-    #result-card { display: none; text-align: center; }
-
-    .btn-download {
-      display: inline-block;
-      width: 100%;
-      padding: 12px;
-      background: #2563eb;
-      border: none;
-      border-radius: 4px;
-      color: #ffffff;
-      font-family: inherit;
-      font-size: 0.95rem;
-      font-weight: 600;
-      cursor: pointer;
-      text-decoration: none;
-      transition: background 0.15s;
-      margin-top: 12px;
-    }
-    .btn-download:hover { background: #1d4ed8; }
-
-    .btn-again {
-      display: inline-block;
-      width: 100%;
-      margin-top: 8px;
-      padding: 10px;
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      color: var(--text);
-      font-family: inherit;
-      font-size: 0.9rem;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .btn-again:hover { background: var(--surface-input); }
-
-    /* ---- Error ---- */
     .error-box {
-      background: rgba(230,0,18,0.15);
-      border: 1px solid var(--primary);
-      border-radius: 4px;
-      padding: 12px;
-      color: #ff8080;
-      font-size: 0.9rem;
-      margin-top: 16px;
-      display: none;
+      padding: 12px 16px;
+      font-size: 0.95rem;
     }
+    .error-box::before { content: "Oops! "; font-family: var(--pixel); font-weight: 700; }
 
-    /* ---- Footer ---- */
-    footer {
-      margin-top: auto;
-      padding: 24px;
-      color: var(--muted);
-      font-size: 0.8rem;
-      text-align: center;
+    .yeah-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+    /* Miiverse's Yeah button in pixels: plain until you mean it, then green */
+    .btn-submit {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      font-family: var(--pixel);
+      font-weight: 700;
+      font-size: 1.5rem;
+      color: var(--ink);
+      border: none;
+      padding: 10px 26px 10px 14px;
+      cursor: pointer;
     }
-    footer a { color: var(--text); text-decoration: underline; }
+    .btn-submit svg { width: 40px; height: 36px; transition: transform 0.1s steps(2); }
+    .btn-submit:hover:not(:disabled) { color: var(--yeah); background: var(--yeah-wash); }
+    .btn-submit:hover:not(:disabled) svg { transform: translateY(-2px); }
+    /* A transform or opacity would lift the dither above the button, so it hides instead */
+    .btn-submit:active:not(:disabled) { transform: translate(3px, 6px); }
+    .btn-submit:active:not(:disabled)::after, .btn-submit:disabled::after { display: none; }
+    .btn-submit:disabled { color: var(--soft); cursor: not-allowed; }
+    .btn-submit:disabled svg { opacity: 0.45; }
+    .yeah-note { color: var(--soft); font-size: 0.9rem; max-width: 26ch; }
+
+    /* ---- Doodle ---- */
+    .doodle-wrap { margin: 4px 3px 0; }
+    .doodle {
+      display: block;
+      width: 100%;
+      aspect-ratio: 320 / 120;
+      image-rendering: pixelated;
+      background: #fff;
+      box-shadow: 0 0 0 3px var(--ink);
+      cursor: crosshair;
+      touch-action: none;
+    }
+    .tools { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
+    .tool {
+      font-family: var(--pixel);
+      font-size: 0.98rem;
+      background: var(--card);
+      color: var(--ink);
+      border: none;
+      padding: 5px 12px;
+      box-shadow: 0 -2px 0 0 var(--ink), 0 2px 0 0 var(--ink), -2px 0 0 0 var(--ink), 2px 0 0 0 var(--ink);
+      cursor: pointer;
+    }
+    .tool[aria-pressed="true"] { background: var(--ink); color: var(--card); }
+    .tools .spacer { flex: 1; }
+    .status-text { margin-top: 16px; }
+    .progress-bar-wrap { height: 18px; margin: 12px 3px 0; box-shadow: 0 0 0 3px var(--ink); background: var(--card); overflow: hidden; position: relative; }
+    .progress-bar { position: absolute; top: 0; bottom: 0; width: 30%; background: var(--dither) 0 0 / 4px 4px; image-rendering: pixelated; animation: crawl 1.4s steps(14) infinite; }
+    @keyframes crawl { from { left: -30%; } to { left: 100%; } }
+
+    .keepsake { margin: 14px 3px 0; }
+    .keepsake img { display: block; width: 100%; image-rendering: pixelated; box-shadow: 0 0 0 3px var(--ink); background: #fff; }
+    .keepsake p { font-size: 0.84rem; color: var(--soft); margin-top: 8px; }
+    .btn-download {
+      display: block;
+      margin: 18px 3px 0;
+      padding: 12px;
+      text-align: center;
+      font-family: var(--pixel);
+      font-weight: 700;
+      font-size: 1.3rem;
+      color: var(--leaf-ink);
+      background: var(--leaf);
+      text-decoration: none;
+      box-shadow: 0 -3px 0 0 #141414, 0 3px 0 0 #141414, -3px 0 0 0 #141414, 3px 0 0 0 #141414;
+    }
+    .btn-download:hover { filter: brightness(1.06); }
+    .btn-again { margin: 16px 3px 0; }
+
+    /* ---- Sidebar ---- */
+    .side { display: grid; gap: 30px; }
+    .side .px { padding: 18px 18px 20px; }
+    .side h2 { font-family: var(--pixel); font-weight: 700; font-size: 1.3rem; margin-bottom: 8px; }
+    .side p { font-size: 0.9rem; }
+    .side p + p { margin-top: 8px; }
+    .side a { color: inherit; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+    .side a:hover { background: var(--leaf); color: #141414; }
+
+    @media (max-width: 860px) {
+      .board { grid-template-columns: 1fr; gap: 36px; }
+    }
+    @media (max-width: 520px) {
+      .top-inner { padding-top: 28px; gap: 14px; }
+      .top-inner { justify-content: center; text-align: center; }
+      .tagline { margin-inline: auto; }
+      .say { font-size: 1.35rem; }
+      .options { grid-template-columns: 1fr; }
+      .post { padding: 16px; }
+      .btn-submit { width: calc(100% - 6px); justify-content: center; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
+    }
   </style>
   <!-- jsQR: client-side QR decoder for binary Mii QR payloads -->
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
-<body>
+<body data-stage="input">
 
-<header>
-  <h1>PrintMiiOut</h1>
-  <p class="tagline">
-    Convert Mii data into 3D-printable STL files. Enter an NNID/PNID, upload a binary file or QR code, and export a ready-to-print 3D model.
-  </p>
+<header class="top">
+  <div class="top-inner">
+    <div>
+      <h1>PrintMiiOut</h1>
+      <p class="tagline">Turn any Mii into a 3D-printable STL. Bring an NNID, a PNID, a Mii file or a QR code.</p>
+    </div>
+  </div>
 </header>
 
-<!-- Input card -->
-<form class="card" id="input-card" onsubmit="return false;">
-  <div class="section-title">Mii Source</div>
+<div class="board">
+  <main class="feed">
+    <!-- Input card -->
+    <form id="input-card" onsubmit="return false;" style="display:grid;gap:30px">
+      <article class="px post">
+        <div class="post-head">
+          <div><p class="who">PrintMiiOut</p><p class="when">just now</p></div>
+        </div>
+        <p class="say">Who are we printing today?</p>
 
-  <div class="tab-row">
-    <button class="tab-btn active" type="button" data-tab="nnid">NNID</button>
-    <button class="tab-btn"        type="button" data-tab="pnid">PNID</button>
-    <button class="tab-btn"        type="button" data-tab="data">Data / File</button>
-    <button class="tab-btn"        type="button" data-tab="qr">QR Code</button>
-  </div>
+        <div class="tab-row" role="tablist">
+          <button class="tab-btn active" type="button" data-tab="nnid" role="tab" aria-selected="true">NNID</button>
+          <button class="tab-btn"        type="button" data-tab="pnid" role="tab" aria-selected="false">PNID</button>
+          <button class="tab-btn"        type="button" data-tab="data" role="tab" aria-selected="false">Data / File</button>
+          <button class="tab-btn"        type="button" data-tab="qr"   role="tab" aria-selected="false">QR Code</button>
+        </div>
 
-  <!-- NNID panel -->
-  <div class="panel active" id="panel-nnid">
-    <div class="field">
-      <label for="nnid-input">Nintendo Network ID</label>
-      <input type="text" id="nnid-input" placeholder="e.g. JasmineChlora"
-             maxlength="16" pattern="^[0-9a-zA-Z\-_.]+$">
-      <div class="field-note">Looks up Mii data using public NNID archives.</div>
-    </div>
-  </div>
+        <!-- NNID panel -->
+        <div class="panel active" id="panel-nnid">
+          <div class="field">
+            <label for="nnid-input">Nintendo Network ID</label>
+            <input type="text" id="nnid-input" placeholder="e.g. JasmineChlora"
+                   maxlength="16" pattern="^[0-9a-zA-Z\-_.]+$" autocomplete="off" spellcheck="false">
+            <div class="field-note">Looks up Mii data using public NNID archives.</div>
+          </div>
+        </div>
 
-  <!-- PNID panel -->
-  <div class="panel" id="panel-pnid">
-    <div class="field">
-      <label for="pnid-input">Pretendo Network ID</label>
-      <input type="text" id="pnid-input" placeholder="e.g. PN_Jon"
-             maxlength="16" pattern="^[0-9a-zA-Z\-_.]+$">
-      <div class="field-note">Requires an active Pretendo Network account.</div>
-    </div>
-  </div>
+        <!-- PNID panel -->
+        <div class="panel" id="panel-pnid">
+          <div class="field">
+            <label for="pnid-input">Pretendo Network ID</label>
+            <input type="text" id="pnid-input" placeholder="e.g. PN_Jon"
+                   maxlength="16" pattern="^[0-9a-zA-Z\-_.]+$" autocomplete="off" spellcheck="false">
+            <div class="field-note">Requires an active Pretendo Network account.</div>
+          </div>
+        </div>
 
-  <!-- Data panel -->
-  <div class="panel" id="panel-data">
-    <div class="field">
-      <label for="data-file">Upload Mii binary file</label>
-      <input type="file" id="data-file" accept=".cfsd,.ffsd,.miigx,.mii,.mae,.rcd,.rsd,.charinfo,.ufsd,.nfsd,.mnms,.bin">
-      <div class="field-note">Supports 3DS/Wii U (.cfsd/.ffsd), Wii (.miigx/.mae), Switch (.charinfo), and Mii Studio (.mnms).</div>
-    </div>
-    <div class="field" style="margin-top:12px">
-      <label for="data-text">Or paste hex / Base64 / Mii Studio URL</label>
-      <textarea id="data-text" placeholder="AwBgMIJUICvp…"></textarea>
-    </div>
-  </div>
+        <!-- Data panel -->
+        <div class="panel" id="panel-data">
+          <div class="field">
+            <label for="data-file">Upload Mii binary file</label>
+            <input type="file" id="data-file" accept=".cfsd,.ffsd,.miigx,.mii,.mae,.rcd,.rsd,.charinfo,.ufsd,.nfsd,.mnms,.bin">
+            <div class="field-note">Supports 3DS/Wii U (.cfsd/.ffsd), Wii (.miigx/.mae), Switch (.charinfo), and Mii Studio (.mnms).</div>
+          </div>
+          <div class="field">
+            <label for="data-text">Or paste hex / Base64 / Mii Studio URL</label>
+            <textarea id="data-text" placeholder="AwBgMIJUICvp…"></textarea>
+          </div>
+        </div>
 
-  <!-- QR panel -->
-  <div class="panel" id="panel-qr">
-    <div class="field">
-      <label for="qr-file">Upload QR Code Image</label>
-      <input type="file" id="qr-file" accept="image/*,.png,.jpg,.jpeg,.bmp,.webp">
-      <div class="field-note" id="qr-status" style="margin-top:8px;">Upload a photo or screenshot of a Mii QR code (3DS, Wii U, Tomodachi Life).</div>
-    </div>
-    <!-- Hidden field populated by JS after client-side decode -->
-    <input type="hidden" id="qr-decoded-data" value="">
-  </div>
+        <!-- QR panel -->
+        <div class="panel" id="panel-qr">
+          <div class="field">
+            <label for="qr-file">Upload QR Code Image</label>
+            <input type="file" id="qr-file" accept="image/*,.png,.jpg,.jpeg,.bmp,.webp">
+            <div class="field-note" id="qr-status" aria-live="polite">Upload a photo or screenshot of a Mii QR code (3DS, Wii U, Tomodachi Life).</div>
+          </div>
+          <!-- Hidden field populated by JS after client-side decode -->
+          <input type="hidden" id="qr-decoded-data" value="">
+        </div>
+      </article>
 
-  <div class="section-title" style="margin-top:28px">Model Options</div>
+      <article class="px post">
+        <div class="post-head">
+          <div><p class="who">PrintMiiOut</p><p class="when">just now</p></div>
+        </div>
+        <p class="say">How should they look?</p>
+        <div class="options">
+          <div class="field">
+            <label for="expression">Expression</label>
+            <select id="expression">
+              <option value="normal">Normal</option>
+              <option value="smile">Smile</option>
+              <option value="anger">Anger</option>
+              <option value="sorrow">Sorrow</option>
+              <option value="surprise">Surprise</option>
+              <option value="blink">Blink</option>
+              <option value="normal_open_mouth">Normal (open mouth)</option>
+              <option value="smile_open_mouth">Smile (open mouth)</option>
+              <option value="wink_left">Wink left</option>
+              <option value="wink_right">Wink right</option>
+              <option value="frustrated">Frustrated</option>
+            </select>
+          </div>
+          <div class="field">
+            <span class="label" id="body-label">Body</span>
+            <div class="gender-row" role="group" aria-labelledby="body-label">
+              <button class="gender-btn selected" data-gender="auto" type="button" aria-pressed="true">Auto</button>
+              <button class="gender-btn"          data-gender="m"    type="button" aria-pressed="false">Male</button>
+              <button class="gender-btn"          data-gender="f"    type="button" aria-pressed="false">Female</button>
+            </div>
+          </div>
+        </div>
+      </article>
 
-  <div class="options-grid">
-    <div class="field">
-      <label for="expression">Expression</label>
-      <select id="expression">
-        <option value="normal">Normal</option>
-        <option value="smile">Smile</option>
-        <option value="anger">Anger</option>
-        <option value="sorrow">Sorrow</option>
-        <option value="surprise">Surprise</option>
-        <option value="blink">Blink</option>
-        <option value="normal_open_mouth">Normal (open mouth)</option>
-        <option value="smile_open_mouth">Smile (open mouth)</option>
-        <option value="wink_left">Wink left</option>
-        <option value="wink_right">Wink right</option>
-        <option value="frustrated">Frustrated</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Body Gender</label>
-      <div class="gender-row">
-        <button class="gender-btn selected" data-gender="auto" type="button">Auto</button>
-        <button class="gender-btn"          data-gender="m"    type="button">Male</button>
-        <button class="gender-btn"          data-gender="f"    type="button">Female</button>
+      <div class="px error-box" id="error-box" role="alert" hidden></div>
+
+      <div class="yeah-row">
+        <button class="px btn-submit" id="btn-submit" type="submit">
+          <svg viewBox="0 0 20 18" aria-hidden="true" shape-rendering="crispEdges"><path fill="#b8ee3a" d="M4 0h4v1h-4zM2 1h4v1h-4zM1 2h3v1h-3zM1 3h2v1h-2zM0 4h2v1h-2zM0 5h1v1h-1zM0 6h1v1h-1z"/><path fill="#86d41a" d="M6 1h4v1h-4zM4 2h6v1h-6zM3 3h7v1h-7zM2 4h1v1h-1zM4 4h4v1h-4zM9 4h2v1h-2zM1 5h2v1h-2zM4 5h4v1h-4zM9 5h2v1h-2zM1 6h2v1h-2zM4 6h4v1h-4zM9 6h2v1h-2zM0 7h11v1h-11zM0 8h3v1h-3zM4 8h4v1h-4zM9 8h2v1h-2zM1 9h3v1h-3zM8 9h2v1h-2zM1 10h9v1h-9zM2 11h6v1h-6zM3 12h5v1h-5zM3 13h5v1h-5zM2 14h7v1h-7zM2 15h7v1h-7zM1 16h9v1h-9zM1 17h9v1h-9z"/><path fill="#5bb514" d="M10 2h1v1h-1zM10 3h1v1h-1zM11 4h1v1h-1zM11 5h1v1h-1zM11 6h1v1h-1zM11 7h1v1h-1zM11 8h1v1h-1zM10 9h1v1h-1zM10 10h1v1h-1zM8 11h2v1h-2zM8 12h1v1h-1zM8 13h1v1h-1zM9 14h1v1h-1zM9 15h1v1h-1zM10 16h1v1h-1zM10 17h1v1h-1z"/><path fill="#ffffff" d="M3 4h1v1h-1zM8 4h1v1h-1zM3 5h1v1h-1zM8 5h1v1h-1zM3 6h1v1h-1zM8 6h1v1h-1zM3 8h1v1h-1zM8 8h1v1h-1zM4 9h4v1h-4z"/><path fill="#6fcb12" d="M14 8h2v1h-2zM14 9h2v1h-2zM14 10h2v1h-2zM11 11h8v1h-8zM11 12h8v1h-8zM11 13h1v1h-1zM14 14h2v1h-2zM14 15h2v1h-2z"/><path fill="#4ea40e" d="M16 8h1v1h-1zM16 9h1v1h-1zM16 10h1v1h-1zM19 11h1v1h-1zM19 12h1v1h-1zM12 13h8v1h-8zM16 14h1v1h-1zM16 15h1v1h-1zM14 16h3v1h-3z"/></svg>
+          Yeah! Print it
+        </button>
+        <p class="yeah-note">Blender takes 1 to 3 minutes. You can doodle while it works.</p>
       </div>
-    </div>
-  </div>
+    </form>
 
-  <div class="error-box" id="error-box"></div>
+    <!-- Progress card -->
+    <article class="px post" id="progress-card" hidden>
+      <div class="post-head">
+        <div><p class="who">PrintMiiOut</p><p class="when">working…</p></div>
+      </div>
+      <p class="say">Printing takes a minute. Draw something while you wait!</p>
+      <div class="doodle-wrap">
+        <canvas class="doodle" id="doodle" width="320" height="120" aria-label="Doodle canvas, 320 by 120 pixels"></canvas>
+      </div>
+      <div class="tools" role="toolbar" aria-label="Doodle tools">
+        <button class="tool" type="button" data-size="1" aria-pressed="true">Fine pen</button>
+        <button class="tool" type="button" data-size="3" aria-pressed="false">Thick pen</button>
+        <button class="tool" type="button" data-size="0" aria-pressed="false">Eraser</button>
+        <span class="spacer"></span>
+        <button class="tool" type="button" id="doodle-clear">Clear</button>
+      </div>
+      <p class="status-text" id="status-text" aria-live="polite">Fetching Mii data from the API…</p>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar indeterminate" id="progress-bar"></div>
+      </div>
+    </article>
 
-  <button class="btn-submit" id="btn-submit" type="submit">Generate 3D STL</button>
-</form>
+    <!-- Result card -->
+    <article class="px post" id="result-card" hidden>
+      <div class="post-head">
+        <div><p class="who">PrintMiiOut</p><p class="when">just now</p></div>
+      </div>
+      <p class="say">Your Mii is ready!</p>
+      <p>Your 3D Mii STL file has been generated successfully.</p>
+      <div class="keepsake" id="keepsake" hidden>
+        <img id="keepsake-img" alt="The doodle you drew while waiting">
+        <p>Your doodle from while you waited. Right-click or long-press to save it.</p>
+      </div>
+      <a id="download-link" class="btn-download" href="#">Download STL File</a>
+      <button class="tool btn-again" id="btn-again" type="button">Create Another</button>
+    </article>
+  </main>
 
-<!-- Progress card -->
-<div class="card" id="progress-card">
-  <div class="section-title">Processing</div>
-  <p class="status-text" id="status-text">Fetching Mii data from the API…</p>
-  <div class="progress-bar-wrap">
-    <div class="progress-bar indeterminate" id="progress-bar"></div>
-  </div>
+  <aside class="side">
+    <section class="px">
+      <h2>About</h2>
+      <p>PrintMiiOut fetches your Mii, builds a head and body in Blender, and hands you an STL for your slicer.</p>
+      <p>Printer, filament and patience not included.</p>
+    </section>
+    <section class="px">
+      <h2>Credits</h2>
+      <p>3D processing via Blender.</p>
+      <p>Mii rendering powered by <a href="https://mii-unsecure.ariankordi.net/" target="_blank" rel="noopener">mii-unsecure.ariankordi.net</a> by Arian Kordi.</p>
+      <p><a href="https://github.com/quatric/PrintMiiOut/" target="_blank" rel="noopener">Source Code</a></p>
+    </section>
+  </aside>
 </div>
-
-<!-- Result card -->
-<div class="card" id="result-card">
-  <div class="section-title">Ready for Download</div>
-  <p style="margin-bottom: 16px; color: var(--text);">Your 3D Mii STL file has been generated successfully.</p>
-  <a id="download-link" class="btn-download" href="#">Download STL File</a>
-  <button class="btn-again" id="btn-again">Create Another</button>
-</div>
-
-<footer>
-  3D processing via Blender.<br>
-  Mii rendering powered by <a href="https://mii-unsecure.ariankordi.net/" target="_blank">mii-unsecure.ariankordi.net</a> by Arian Kordi.<br>
-  <a href="https://github.com/quatric/PrintMiiOut/" target="_blank">Source Code</a>
-</footer>
 
 <script>
+  // ── Stage switching ───────────────────────────────────────────────────────
+  const inputCard   = document.getElementById('input-card');
+  const progressCard= document.getElementById('progress-card');
+  const resultCard  = document.getElementById('result-card');
+
+  function setStage(stage) {
+    document.body.dataset.stage = stage;
+    inputCard.hidden    = stage !== 'input';
+    progressCard.hidden = stage !== 'progress';
+    resultCard.hidden   = stage !== 'result';
+  }
+
   // ── Tab switching ─────────────────────────────────────────────────────────
   const tabBtns  = document.querySelectorAll('.tab-btn');
   const panels   = document.querySelectorAll('.panel');
   let activeTab  = 'nnid';
 
+  const QR_HINT = 'Upload a photo or screenshot of a Mii QR code (3DS, Wii U, Tomodachi Life).';
+  const qrStatus = document.getElementById('qr-status');
+  const qrFileInput = document.getElementById('qr-file');
+  const qrDecodedData = document.getElementById('qr-decoded-data');
+
+  function setQrStatus(text, state) {
+    qrStatus.textContent = text;
+    qrStatus.dataset.state = state || '';
+  }
+
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       activeTab = btn.dataset.tab;
-      tabBtns.forEach(b => b.classList.toggle('active', b === btn));
+      tabBtns.forEach(b => {
+        b.classList.toggle('active', b === btn);
+        b.setAttribute('aria-selected', b === btn);
+      });
       panels.forEach(p => p.classList.toggle('active', p.id === `panel-${activeTab}`));
       // Reset QR status when switching away and back
       if (activeTab !== 'qr') {
-        document.getElementById('qr-decoded-data').value = '';
-        document.getElementById('qr-status').textContent =
-          'Upload a photo or screenshot of a Mii QR code (3DS, Wii U, Tomodachi Life).';
-        document.getElementById('qr-status').style.color = '';
-        document.getElementById('qr-file').value = '';
+        qrDecodedData.value = '';
+        setQrStatus(QR_HINT);
+        qrFileInput.value = '';
       }
     });
   });
@@ -493,8 +508,10 @@
   document.querySelectorAll('.gender-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       bodyGender = btn.dataset.gender;
-      document.querySelectorAll('.gender-btn').forEach(b =>
-        b.classList.toggle('selected', b === btn));
+      document.querySelectorAll('.gender-btn').forEach(b => {
+        b.classList.toggle('selected', b === btn);
+        b.setAttribute('aria-pressed', b === btn);
+      });
     });
   });
 
@@ -510,37 +527,16 @@
     uploadedFileB64 = btoa(bin);
   });
 
-  // ── QR decoding (client-side via jsQR) ────────────────────────────────────
-  // AES-CCM Mii QR key (shared secret, publicly documented)
-  const MII_QR_KEY = [0x59,0xFC,0x81,0x7E,0x64,0x46,0xEA,0x61,
-                       0x90,0x34,0x7B,0x20,0xE9,0xBD,0xCE,0x52];
-
-  async function decryptMiiQR(bytes) {
-    if (bytes.length < 0x60) return bytes;
-    const nonce = bytes.slice(0, 8);
-    // AES-CCM: import key, decrypt bytes[8..8+0x58]
-    const keyBuf = new Uint8Array(MII_QR_KEY);
-    // CCM not natively in WebCrypto; use SubtleCrypto CTR approximation or
-    // send to server's /decode-qr which uses pycryptodome's CCM.
-    // We use the server endpoint for proper CCM decryption.
-    throw new Error('Use server-side CCM decryption');
-  }
-
-  const qrStatus = document.getElementById('qr-status');
-  const qrFileInput = document.getElementById('qr-file');
-  const qrDecodedData = document.getElementById('qr-decoded-data');
-
+  // ── QR decoding (client-side via jsQR, AES-CCM on the server) ─────────────
   qrFileInput.addEventListener('change', async e => {
     const file = e.target.files[0];
     if (!file) {
       qrDecodedData.value = '';
-      qrStatus.textContent = 'Upload a photo or screenshot of a Mii QR code (3DS, Wii U, Tomodachi Life).';
-      qrStatus.style.color = '';
+      setQrStatus(QR_HINT);
       return;
     }
 
-    qrStatus.textContent = 'Scanning QR code...';
-    qrStatus.style.color = 'var(--muted)';
+    setQrStatus('Scanning QR code...', 'busy');
 
     // Try client-side jsQR first
     let decoded = null;
@@ -571,21 +567,19 @@
         const j = await r.json();
         if (j.data) {
           qrDecodedData.value = j.data;
-          qrStatus.textContent = `✓ QR decoded successfully (${decoded.length} bytes → decrypted ${j.size} bytes).`;
-          qrStatus.style.color = 'limegreen';
+          setQrStatus(`✓ QR decoded successfully (${decoded.length} bytes → decrypted ${j.size} bytes).`, 'ok');
           return;
         }
       } catch (_) {}
     } else if (decoded && decoded.length > 0) {
       // Short payload — convert to hex directly
       qrDecodedData.value = Array.from(decoded).map(b => b.toString(16).padStart(2, '0')).join('');
-      qrStatus.textContent = `✓ QR decoded (${decoded.length} bytes).`;
-      qrStatus.style.color = 'limegreen';
+      setQrStatus(`✓ QR decoded (${decoded.length} bytes).`, 'ok');
       return;
     }
 
     // Fallback: send image to server /decode-qr
-    qrStatus.textContent = 'Sending to server for QR decode...';
+    setQrStatus('Sending to server for QR decode...', 'busy');
     const fd3 = new FormData();
     fd3.append('qr_file', file);
     try {
@@ -593,16 +587,13 @@
       const j = await r.json();
       if (j.data) {
         qrDecodedData.value = j.data;
-        qrStatus.textContent = `✓ QR decoded via server (${j.size} bytes).`;
-        qrStatus.style.color = 'limegreen';
+        setQrStatus(`✓ QR decoded via server (${j.size} bytes).`, 'ok');
       } else {
-        qrStatus.textContent = `✗ ${j.error || 'Failed to decode QR code.'}`;
-        qrStatus.style.color = '#ff8080';
+        setQrStatus(`✗ ${j.error || 'Failed to decode QR code.'}`, 'error');
         qrDecodedData.value = '';
       }
     } catch (err) {
-      qrStatus.textContent = '✗ Network error during QR decode.';
-      qrStatus.style.color = '#ff8080';
+      setQrStatus('✗ Network error during QR decode.', 'error');
       qrDecodedData.value = '';
     }
   });
@@ -610,20 +601,17 @@
   // ── Submit ────────────────────────────────────────────────────────────────
   const btnSubmit   = document.getElementById('btn-submit');
   const errorBox    = document.getElementById('error-box');
-  const inputCard   = document.getElementById('input-card');
-  const progressCard= document.getElementById('progress-card');
-  const resultCard  = document.getElementById('result-card');
   const statusText  = document.getElementById('status-text');
   const downloadLink= document.getElementById('download-link');
   let pollTimer = null;
 
   function showError(msg) {
     errorBox.textContent = msg;
-    errorBox.style.display = 'block';
+    errorBox.hidden = false;
     btnSubmit.disabled = false;
   }
 
-  function hideError() { errorBox.style.display = 'none'; }
+  function hideError() { errorBox.hidden = true; }
 
   async function handleGenerate() {
     if (btnSubmit.disabled) return;
@@ -646,7 +634,7 @@
       fd.append('pnid', v);
 
     } else if (activeTab === 'qr') {
-      const decoded = document.getElementById('qr-decoded-data').value.trim();
+      const decoded = qrDecodedData.value.trim();
       if (!decoded) {
         return showError('Please upload a QR code image and wait for it to be decoded.');
       }
@@ -669,8 +657,7 @@
     }
 
     statusText.textContent = 'Fetching Mii data from the API…';
-    inputCard.style.display    = 'none';
-    progressCard.style.display = 'block';
+    setStage('progress');
 
     let jobId;
     try {
@@ -685,8 +672,7 @@
       if (!res.ok) throw new Error((json && json.error) || 'Server error.');
       jobId = json.job_id;
     } catch (err) {
-      inputCard.style.display    = 'block';
-      progressCard.style.display = 'none';
+      setStage('input');
       return showError(err.message);
     }
 
@@ -698,16 +684,13 @@
     handleGenerate();
   });
 
-  btnSubmit.addEventListener('click', (e) => {
-    e.preventDefault();
-    handleGenerate();
-  });
-
   inputCard.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       if (e.target.tagName === 'TEXTAREA' && !e.metaKey && !e.ctrlKey) {
         return;
       }
+      // Let Enter press the focused button (tabs, body toggle) instead of submitting.
+      if (e.target.tagName === 'BUTTON') return;
       e.preventDefault();
       handleGenerate();
     }
@@ -722,14 +705,12 @@
 
         if (json.status === 'done') {
           clearInterval(pollTimer);
-          progressCard.style.display = 'none';
           downloadLink.href = `/download/${jobId}`;
-          resultCard.style.display = 'block';
+          setStage('result');
 
         } else if (json.status === 'error') {
           clearInterval(pollTimer);
-          progressCard.style.display = 'none';
-          inputCard.style.display    = 'block';
+          setStage('input');
           showError('Blender error: ' + (json.error || 'Unknown error.'));
           btnSubmit.disabled = false;
         }
@@ -743,14 +724,79 @@
   // ── Start over ────────────────────────────────────────────────────────────
   document.getElementById('btn-again').addEventListener('click', () => {
     if (pollTimer) clearInterval(pollTimer);
-    resultCard.style.display   = 'none';
-    progressCard.style.display = 'none';
-    inputCard.style.display    = 'block';
+    setStage('input');
     btnSubmit.disabled = false;
     uploadedFileB64 = null;
     document.getElementById('data-file').value = '';
     document.getElementById('data-text').value = '';
   });
+
+  // ── Doodle canvas (1-bit, 320×120 like a handwritten post) ───────────────
+  const doodle = document.getElementById('doodle');
+  const dctx = doodle.getContext('2d');
+  let penSize = 1;
+  let drawn = false;
+  function clearDoodle() {
+    dctx.fillStyle = '#fff';
+    dctx.fillRect(0, 0, doodle.width, doodle.height);
+    drawn = false;
+  }
+  clearDoodle();
+
+  document.querySelectorAll('.tool[data-size]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      penSize = Number(btn.dataset.size);
+      document.querySelectorAll('.tool[data-size]').forEach(b => b.setAttribute('aria-pressed', b === btn));
+    });
+  });
+  document.getElementById('doodle-clear').addEventListener('click', clearDoodle);
+
+  function dot(x, y) {
+    const size = penSize || 5;
+    dctx.fillStyle = penSize ? '#141414' : '#fff';
+    dctx.fillRect(x - (size >> 1), y - (size >> 1), size, size);
+  }
+  function line(x0, y0, x1, y1) {
+    const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy;
+    for (;;) {
+      dot(x0, y0);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x0 += sx; }
+      if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+  }
+  function toPixel(e) {
+    const r = doodle.getBoundingClientRect();
+    return [Math.floor((e.clientX - r.left) / r.width * doodle.width),
+            Math.floor((e.clientY - r.top) / r.height * doodle.height)];
+  }
+  let last = null;
+  doodle.addEventListener('pointerdown', e => {
+    doodle.setPointerCapture(e.pointerId);
+    last = toPixel(e);
+    dot(...last);
+    drawn = drawn || penSize > 0;
+  });
+  doodle.addEventListener('pointermove', e => {
+    if (!last) return;
+    const p = toPixel(e);
+    line(last[0], last[1], p[0], p[1]);
+    last = p;
+  });
+  doodle.addEventListener('pointerup', () => { last = null; });
+  doodle.addEventListener('pointercancel', () => { last = null; });
+
+  new MutationObserver(() => {
+    const stage = document.body.dataset.stage;
+    if (stage === 'progress') clearDoodle();
+    if (stage === 'result') {
+      document.getElementById('keepsake').hidden = !drawn;
+      if (drawn) document.getElementById('keepsake-img').src = doodle.toDataURL('image/png');
+    }
+  }).observe(document.body, { attributes: true, attributeFilter: ['data-stage'] });
 </script>
 </body>
 </html>
