@@ -348,6 +348,7 @@ VOXEL_SIZE = 1 / 240
 BASE_RADIUS = 0.45
 BASE_HEIGHT = 0.05
 BASE_SINK = 0.025
+BODY_THICKEN = 0.006
 MIN_ISLAND = 0.01
 MAX_TRIS = 600_000
 
@@ -645,6 +646,12 @@ def _attach_body(body_type, head):
         print(f"  {obj.name}: {len(oe)} open edges, {len(bm.faces):,} faces")
         bm.free()
 
+    # Thin ankles, wrists and the skirt hem snap once the figure is scaled down.
+    thicken = body_objs[0].modifiers.new('Thicken', type='DISPLACE')
+    thicken.mid_level = 0.0
+    thicken.strength = head_width * BODY_THICKEN
+    bpy.context.view_layer.objects.active = body_objs[0]
+    bpy.ops.object.modifier_apply(modifier=thicken.name)
     return True
 
 
