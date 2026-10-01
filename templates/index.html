@@ -6,8 +6,12 @@
   <title>PrintMiiOut - 3D Print Your Mii</title>
   <meta name="theme-color" content="#eeeeee" id="theme-color">
   <script>
-    // Runs before first paint so a saved dark choice never flashes light.
-    try { if (localStorage.getItem('printmiiout-theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (_) {}
+    // Runs before first paint so the page never flashes the wrong theme.
+    let savedTheme = null;
+    try { savedTheme = localStorage.getItem('printmiiout-theme'); } catch (_) {}
+    if (savedTheme ? savedTheme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches) {
+      document.documentElement.dataset.theme = 'dark';
+    }
   </script>
   <link rel="icon" href="{{ url_for('static', filename='favicon-32.png') }}" sizes="32x32" type="image/png">
   <link rel="icon" href="{{ url_for('static', filename='favicon-192.png') }}" sizes="192x192" type="image/png">
@@ -900,7 +904,7 @@
   expressionSelect.addEventListener('change', paintAvatars);
   lookUpMii();
 
-  // ── Dark mode toggle, remembered on this device ───────────────────────────
+  // ── Dark mode follows the device until someone picks with the toggle ────
   const themeToggle = document.getElementById('theme-toggle');
   const themeColor = document.getElementById('theme-color');
   function applyTheme(dark) {
@@ -913,7 +917,11 @@
   themeToggle.addEventListener('click', () => {
     const dark = document.documentElement.dataset.theme !== 'dark';
     applyTheme(dark);
-    try { localStorage.setItem('printmiiout-theme', dark ? 'dark' : 'light'); } catch (_) {}
+    savedTheme = dark ? 'dark' : 'light';
+    try { localStorage.setItem('printmiiout-theme', savedTheme); } catch (_) {}
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    if (!savedTheme) applyTheme(e.matches);
   });
 
   // ── Doodle canvas (1-bit, 320×120 like a handwritten post) ───────────────
