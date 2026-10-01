@@ -480,8 +480,8 @@
         <canvas class="doodle" id="doodle" width="320" height="120" aria-label="Doodle canvas, 320 by 120 pixels"></canvas>
       </div>
       <div class="tools" role="toolbar" aria-label="Doodle tools">
-        <button class="tool" type="button" data-size="1" aria-pressed="true">Fine pen</button>
-        <button class="tool" type="button" data-size="3" aria-pressed="false">Thick pen</button>
+        <button class="tool" type="button" data-size="1" aria-pressed="false">Fine pen</button>
+        <button class="tool" type="button" data-size="3" aria-pressed="true">Thick pen</button>
         <button class="tool" type="button" data-size="0" aria-pressed="false">Eraser</button>
         <span class="spacer"></span>
         <button class="tool" type="button" id="doodle-clear">Clear</button>
@@ -917,7 +917,7 @@
   // ── Doodle canvas (1-bit, 320×120 like a handwritten post) ───────────────
   const doodle = document.getElementById('doodle');
   const dctx = doodle.getContext('2d');
-  let penSize = 1;
+  let penSize = 3;
   let drawn = false;
   function clearDoodle() {
     dctx.fillStyle = '#fff';
