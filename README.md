@@ -9,4 +9,5 @@ PrintMiiOut converts Nintendo Mii characters into 3D-printable STL models. Enter
 
 ## Credits
 - **3D processing**: Powered by Blender.
+- **Display font**: [Nintendo U Version 3](https://www.deviantart.com/dledeviant/art/Nintendo-U-Version-3-595000916) by dledeviant, free for non-commercial use.
 - **Mii rendering**: Powered by [mii-unsecure.ariankordi.net](https://mii-unsecure.ariankordi.net/) by Arian Kordi.

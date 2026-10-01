@@ -30,9 +30,9 @@
       font-display: swap;
     }
     @font-face {
-      font-family: 'Pixelify Sans';
-      src: url("{{ url_for('static', filename='fonts/PixelifySans.woff2') }}") format('woff2');
-      font-weight: 400 700;
+      font-family: 'Nintendo U';
+      src: url("{{ url_for('static', filename='fonts/NintendoU.woff2') }}") format('woff2');
+      font-weight: 400;
       font-display: swap;
     }
 
@@ -48,7 +48,7 @@
       --yeah: #3f8a0f;
       --yeah-wash: #eef8e2;
       --dither: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='2' shape-rendering='crispEdges'%3E%3Crect width='1' height='1' fill='%23141414'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%23141414'/%3E%3C/svg%3E");
-      --pixel: 'Pixelify Sans', ui-monospace, monospace;
+      --display: 'Nintendo U', 'Rodin NTLG', sans-serif;
       color-scheme: light;
     }
     :root[data-theme="dark"] {
@@ -69,6 +69,8 @@
     body {
       font-family: 'Rodin NTLG', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       font-weight: 600;
+      /* Nintendo U has one heavy weight; faking a bolder one smudges it */
+      font-synthesis: none;
       background: var(--page) var(--tile);
       color: var(--ink);
       line-height: 1.5;
@@ -106,7 +108,7 @@
       gap: 22px;
     }
     h1 {
-      font-family: var(--pixel);
+      font-family: var(--display);
       font-weight: 700;
       font-size: clamp(2.6rem, 7vw, 4.6rem);
       line-height: 0.9;
@@ -119,7 +121,7 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      font-family: var(--pixel);
+      font-family: var(--display);
       font-size: 0.98rem;
       background: var(--card);
       color: var(--ink);
@@ -157,10 +159,10 @@
     /* Renders use Mii Studio's face framing; this shows the same head crop as the favicon */
     .avatar img { display: block; width: 67px; height: 67px; max-width: none; margin: -10px 0 0 -9.5px; transition: opacity 0.2s; }
     .avatar img.loading { opacity: 0.4; }
-    .who { font-family: var(--pixel); font-weight: 700; font-size: 1.15rem; line-height: 1.1; }
+    .who { font-family: var(--display); font-weight: 700; font-size: 1.15rem; line-height: 1.1; }
     .when { font-size: 0.8rem; color: var(--soft); }
     .say {
-      font-family: var(--pixel);
+      font-family: var(--display);
       font-size: 1.6rem;
       line-height: 1.15;
       margin-bottom: 16px;
@@ -168,7 +170,7 @@
 
     .tab-row { display: flex; flex-wrap: wrap; gap: 12px; margin: 4px 3px 18px; }
     .tab-btn, .gender-btn {
-      font-family: var(--pixel);
+      font-family: var(--display);
       font-size: 1.05rem;
       background: var(--card);
       color: var(--ink);
@@ -196,7 +198,7 @@
     }
     input[type="file"] { padding: 8px; cursor: pointer; }
     input[type="file"]::file-selector-button {
-      font-family: var(--pixel);
+      font-family: var(--display);
       font-size: 1rem;
       border: none;
       background: var(--ink);
@@ -231,7 +233,7 @@
       padding: 12px 16px;
       font-size: 0.95rem;
     }
-    .error-box::before { content: "Oops! "; font-family: var(--pixel); font-weight: 700; }
+    .error-box::before { content: "Oops! "; font-family: var(--display); font-weight: 700; }
 
     .yeah-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
     /* Miiverse's Yeah button in pixels: plain until you mean it, then green */
@@ -239,7 +241,7 @@
       display: inline-flex;
       align-items: center;
       gap: 14px;
-      font-family: var(--pixel);
+      font-family: var(--display);
       font-weight: 700;
       font-size: 1.5rem;
       color: var(--ink);
@@ -271,7 +273,7 @@
     }
     .tools { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
     .tool {
-      font-family: var(--pixel);
+      font-family: var(--display);
       font-size: 0.98rem;
       background: var(--card);
       color: var(--ink);
@@ -295,7 +297,7 @@
       margin: 18px 3px 0;
       padding: 12px;
       text-align: center;
-      font-family: var(--pixel);
+      font-family: var(--display);
       font-weight: 700;
       font-size: 1.3rem;
       color: var(--leaf-ink);
@@ -309,7 +311,7 @@
     /* ---- Sidebar ---- */
     .side { display: grid; gap: 30px; }
     .side .px { padding: 18px 18px 20px; }
-    .side h2 { font-family: var(--pixel); font-weight: 700; font-size: 1.3rem; margin-bottom: 8px; }
+    .side h2 { font-family: var(--display); font-weight: 700; font-size: 1.3rem; margin-bottom: 8px; }
     .side p { font-size: 0.9rem; }
     .side p + p { margin-top: 8px; }
     .side a { color: inherit; text-decoration-thickness: 2px; text-underline-offset: 3px; }
