@@ -244,23 +244,23 @@
     .btn-submit {
       display: inline-flex;
       align-items: center;
-      gap: 14px;
-      font-family: var(--display);
+      gap: 12px;
+      font-family: inherit;
       font-weight: 700;
-      font-size: 1.5rem;
+      font-size: 1.35rem;
       color: var(--ink);
       border: none;
       padding: 10px 26px 10px 14px;
       cursor: pointer;
     }
-    .btn-submit svg { width: 40px; height: 36px; transition: transform 0.1s steps(2); }
+    .btn-submit img { width: 39px; height: 36px; transition: transform 0.15s; }
     .btn-submit:hover:not(:disabled) { color: var(--yeah); background: var(--yeah-wash); }
-    .btn-submit:hover:not(:disabled) svg { transform: translateY(-2px); }
+    .btn-submit:hover:not(:disabled) img { transform: translateY(-2px); }
     /* A transform or opacity would lift the dither above the button, so it hides instead */
     .btn-submit:active:not(:disabled) { transform: translate(3px, 6px); }
     .btn-submit:active:not(:disabled)::after, .btn-submit:disabled::after { display: none; }
     .btn-submit:disabled { color: var(--soft); cursor: not-allowed; }
-    .btn-submit:disabled svg { opacity: 0.45; }
+    .btn-submit:disabled img { opacity: 0.45; }
     .yeah-note { color: var(--soft); font-size: 0.9rem; max-width: 26ch; }
 
     /* ---- Doodle ---- */
@@ -468,7 +468,7 @@
 
       <div class="yeah-row">
         <button class="px btn-submit" id="btn-submit" type="submit">
-          <svg viewBox="0 0 20 18" aria-hidden="true" shape-rendering="crispEdges"><path fill="#b8ee3a" d="M4 0h4v1h-4zM2 1h4v1h-4zM1 2h3v1h-3zM1 3h2v1h-2zM0 4h2v1h-2zM0 5h1v1h-1zM0 6h1v1h-1z"/><path fill="#86d41a" d="M6 1h4v1h-4zM4 2h6v1h-6zM3 3h7v1h-7zM2 4h1v1h-1zM4 4h4v1h-4zM9 4h2v1h-2zM1 5h2v1h-2zM4 5h4v1h-4zM9 5h2v1h-2zM1 6h2v1h-2zM4 6h4v1h-4zM9 6h2v1h-2zM0 7h11v1h-11zM0 8h3v1h-3zM4 8h4v1h-4zM9 8h2v1h-2zM1 9h3v1h-3zM8 9h2v1h-2zM1 10h9v1h-9zM2 11h6v1h-6zM3 12h5v1h-5zM3 13h5v1h-5zM2 14h7v1h-7zM2 15h7v1h-7zM1 16h9v1h-9zM1 17h9v1h-9z"/><path fill="#5bb514" d="M10 2h1v1h-1zM10 3h1v1h-1zM11 4h1v1h-1zM11 5h1v1h-1zM11 6h1v1h-1zM11 7h1v1h-1zM11 8h1v1h-1zM10 9h1v1h-1zM10 10h1v1h-1zM8 11h2v1h-2zM8 12h1v1h-1zM8 13h1v1h-1zM9 14h1v1h-1zM9 15h1v1h-1zM10 16h1v1h-1zM10 17h1v1h-1z"/><path fill="#ffffff" d="M3 4h1v1h-1zM8 4h1v1h-1zM3 5h1v1h-1zM8 5h1v1h-1zM3 6h1v1h-1zM8 6h1v1h-1zM3 8h1v1h-1zM8 8h1v1h-1zM4 9h4v1h-4z"/><path fill="#6fcb12" d="M14 8h2v1h-2zM14 9h2v1h-2zM14 10h2v1h-2zM11 11h8v1h-8zM11 12h8v1h-8zM11 13h1v1h-1zM14 14h2v1h-2zM14 15h2v1h-2z"/><path fill="#4ea40e" d="M16 8h1v1h-1zM16 9h1v1h-1zM16 10h1v1h-1zM19 11h1v1h-1zM19 12h1v1h-1zM12 13h8v1h-8zM16 14h1v1h-1zM16 15h1v1h-1zM14 16h3v1h-3z"/></svg>
+          <img src="{{ url_for('static', filename='yeah.webp') }}" alt="" width="39" height="36">
           Yeah! Print it
         </button>
         <p class="yeah-note">Blender takes 1 to 3 minutes. You can doodle while it works.</p>
