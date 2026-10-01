@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PrintMiiOut - 3D Print Your Mii</title>
-  <meta name="theme-color" content="#f6f5ef" id="theme-color">
+  <meta name="theme-color" content="#eeeeee" id="theme-color">
   <script>
     // Runs before first paint so a saved dark choice never flashes light.
     try { if (localStorage.getItem('printmiiout-theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (_) {}
@@ -37,7 +37,9 @@
     }
 
     :root {
-      --page: #f6f5ef;
+      --page: #eeeeee;
+      /* Rounded-square tiles from mii-unsecure (ariankordi/nwf-mii-cemu-toy), used with Arian's blessing */
+      --tile: url("{{ url_for('static', filename='tile-light.png') }}");
       --card: #ffffff;
       --ink: #141414;
       --soft: #5a5a55;
@@ -50,7 +52,8 @@
       color-scheme: light;
     }
     :root[data-theme="dark"] {
-      --page: #121212;
+      --page: #1c1c1c;
+      --tile: url("{{ url_for('static', filename='tile-dark.png') }}");
       --card: #1d1d1b;
       --ink: #f0efe8;
       --soft: #a9a89f;
@@ -66,7 +69,7 @@
     body {
       font-family: 'Rodin NTLG', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       font-weight: 600;
-      background: var(--page);
+      background: var(--page) var(--tile);
       color: var(--ink);
       line-height: 1.5;
       min-height: 100vh;
