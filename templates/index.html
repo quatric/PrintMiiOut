@@ -143,8 +143,13 @@
     }
     .theme-toggle svg { width: 18px; height: 18px; color: var(--toggle-glyph); }
     .theme-toggle:hover { filter: brightness(1.12); }
-    :root[data-theme="dark"] .theme-toggle .to-dark,
-    :root:not([data-theme="dark"]) .theme-toggle .to-light { display: none; }
+    :root[data-theme="dark"] .theme-toggle svg.to-dark,
+    :root:not([data-theme="dark"]) .theme-toggle svg.to-light { display: none; }
+    /* Both labels share one cell so the button is as wide as the longer one in either mode */
+    .toggle-label { display: grid; text-align: left; }
+    .toggle-label > span { grid-area: 1 / 1; }
+    :root[data-theme="dark"] .toggle-label .to-dark,
+    :root:not([data-theme="dark"]) .toggle-label .to-light { visibility: hidden; }
     /* Official Miis stroll left forever; JS clones the set to cover wide screens */
     .crowd { overflow: hidden; margin-top: 4px; }
     .crowd-track { display: flex; width: max-content; animation: stroll var(--stroll-time, 48s) linear infinite; }
@@ -335,7 +340,7 @@
     @media (max-width: 520px) {
       .top-inner { gap: 14px; justify-content: center; text-align: center; position: relative; padding-top: 52px; }
       .theme-toggle { position: absolute; top: 12px; right: 16px; padding: 6px 8px; }
-      .theme-toggle span { display: none; }
+      .toggle-label { display: none; }
       .tagline { margin-inline: auto; }
       .crowd img { width: 64px; height: 64px; }
       .say { font-size: 1.35rem; }
@@ -362,8 +367,7 @@
     <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Dark mode">
       <svg class="to-dark" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.4 14.6A8.5 8.5 0 0 1 9.4 3.6a8.5 8.5 0 1 0 11 11Z"/></svg>
       <svg class="to-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.6" fill="currentColor"/><path d="M12 1.8v2.6M12 19.6v2.6M1.8 12h2.6M19.6 12h2.6M4.8 4.8l1.8 1.8M17.4 17.4l1.8 1.8M4.8 19.2l1.8-1.8M17.4 6.6l1.8-1.8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-      <span class="to-dark">Dark mode</span>
-      <span class="to-light">Light mode</span>
+      <span class="toggle-label"><span class="to-dark">Dark mode</span><span class="to-light">Light mode</span></span>
     </button>
   </div>
   <div class="crowd" aria-hidden="true">
