@@ -4,8 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PrintMiiOut - 3D Print Your Mii</title>
-  <meta name="theme-color" content="#f6f5ef">
-  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f6f5ef" id="theme-color">
+  <script>
+    // Runs before first paint so a saved dark choice never flashes light.
+    try { if (localStorage.getItem('printmiiout-theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (_) {}
+  </script>
   <link rel="icon" href="{{ url_for('static', filename='favicon-32.png') }}" sizes="32x32" type="image/png">
   <link rel="icon" href="{{ url_for('static', filename='favicon-192.png') }}" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
@@ -44,6 +47,17 @@
       --yeah-wash: #eef8e2;
       --dither: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='2' shape-rendering='crispEdges'%3E%3Crect width='1' height='1' fill='%23141414'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%23141414'/%3E%3C/svg%3E");
       --pixel: 'Pixelify Sans', ui-monospace, monospace;
+      color-scheme: light;
+    }
+    :root[data-theme="dark"] {
+      --page: #121212;
+      --card: #1d1d1b;
+      --ink: #f0efe8;
+      --soft: #a9a89f;
+      --yeah: #9be35a;
+      --yeah-wash: #26331b;
+      --dither: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='2' shape-rendering='crispEdges'%3E%3Crect width='1' height='1' fill='%23f0efe8'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%23f0efe8'/%3E%3C/svg%3E");
+      color-scheme: dark;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -96,6 +110,24 @@
       letter-spacing: 0.01em;
     }
     .tagline { margin: 10px 0 18px; color: var(--soft); max-width: 44ch; }
+    .theme-toggle {
+      margin-left: auto;
+      align-self: flex-start;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--pixel);
+      font-size: 0.98rem;
+      background: var(--card);
+      color: var(--ink);
+      border: none;
+      padding: 5px 12px;
+      box-shadow: 0 -2px 0 0 var(--ink), 0 2px 0 0 var(--ink), -2px 0 0 0 var(--ink), 2px 0 0 0 var(--ink);
+      cursor: pointer;
+    }
+    .theme-toggle svg { width: 16px; height: 16px; }
+    .theme-toggle:hover { background: var(--page); }
+    .theme-toggle[aria-pressed="true"] { background: var(--ink); color: var(--card); }
     /* Official Miis stroll left forever; JS clones the set to cover wide screens */
     .crowd { overflow: hidden; margin-top: 4px; }
     .crowd-track { display: flex; width: max-content; animation: stroll var(--stroll-time, 48s) linear infinite; }
@@ -266,7 +298,7 @@
       color: var(--leaf-ink);
       background: var(--leaf);
       text-decoration: none;
-      box-shadow: 0 -3px 0 0 #141414, 0 3px 0 0 #141414, -3px 0 0 0 #141414, 3px 0 0 0 #141414;
+      box-shadow: 0 -3px 0 0 var(--ink), 0 3px 0 0 var(--ink), -3px 0 0 0 var(--ink), 3px 0 0 0 var(--ink);
     }
     .btn-download:hover { filter: brightness(1.06); }
     .btn-again { margin: 16px 3px 0; }
@@ -284,8 +316,9 @@
       .board { grid-template-columns: 1fr; gap: 36px; }
     }
     @media (max-width: 520px) {
-      .top-inner { padding-top: 28px; gap: 14px; }
-      .top-inner { justify-content: center; text-align: center; }
+      .top-inner { gap: 14px; justify-content: center; text-align: center; position: relative; padding-top: 52px; }
+      .theme-toggle { position: absolute; top: 12px; right: 16px; padding: 6px 8px; }
+      .theme-toggle span { display: none; }
       .tagline { margin-inline: auto; }
       .crowd img { width: 64px; height: 64px; }
       .say { font-size: 1.35rem; }
@@ -309,6 +342,10 @@
       <h1>PrintMiiOut</h1>
       <p class="tagline">Turn any Mii into a 3D-printable STL. Bring an NNID, a PNID, a Mii file or a QR code.</p>
     </div>
+    <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Dark mode" aria-pressed="false">
+      <svg viewBox="0 0 8 8" aria-hidden="true" shape-rendering="crispEdges"><path fill="currentColor" d="M2 0h3v1H2zM1 1h2v1H1zM0 2h2v4H0zM1 6h2v1H1zM2 7h4v1H2zM5 6h2v1H5z"/></svg>
+      <span>Dark mode</span>
+    </button>
   </div>
   <div class="crowd" aria-hidden="true">
     <div class="crowd-track" id="crowd-track">
@@ -857,6 +894,22 @@
   new MutationObserver(lookUpMii).observe(qrStatus, { attributes: true, attributeFilter: ['data-state'] });
   expressionSelect.addEventListener('change', paintAvatars);
   lookUpMii();
+
+  // ── Dark mode toggle, remembered on this device ───────────────────────────
+  const themeToggle = document.getElementById('theme-toggle');
+  const themeColor = document.getElementById('theme-color');
+  function applyTheme(dark) {
+    if (dark) document.documentElement.dataset.theme = 'dark';
+    else delete document.documentElement.dataset.theme;
+    themeToggle.setAttribute('aria-pressed', dark);
+    themeColor.content = getComputedStyle(document.documentElement).getPropertyValue('--page').trim();
+  }
+  applyTheme(document.documentElement.dataset.theme === 'dark');
+  themeToggle.addEventListener('click', () => {
+    const dark = document.documentElement.dataset.theme !== 'dark';
+    applyTheme(dark);
+    try { localStorage.setItem('printmiiout-theme', dark ? 'dark' : 'light'); } catch (_) {}
+  });
 
   // ── Doodle canvas (1-bit, 320×120 like a handwritten post) ───────────────
   const doodle = document.getElementById('doodle');
