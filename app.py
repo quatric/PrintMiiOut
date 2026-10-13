@@ -4,6 +4,7 @@ Fetches Mii GLB/PNG from mii-unsecure.ariankordi.net then runs
 the Blender pipeline to produce a printable STL.
 """
 import os
+import re
 import sys
 import shutil
 import subprocess
@@ -403,7 +404,11 @@ def submit():
         return jsonify(error="Unknown input type."), 400
 
     # Expression param for GLB (using default view and shader)
-    api_params["expression"] = request.form.get("expression", "normal")
+    # Names from the swagger docs, or numeric Miitomo expression ids
+    expression = request.form.get("expression", "normal")
+    if not re.fullmatch(r"[a-z_]{1,32}|\d{1,3}", expression):
+        expression = "normal"
+    api_params["expression"] = expression
 
     try:
         job_id = _start_job(api_params, body_type)
