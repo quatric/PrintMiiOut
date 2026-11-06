@@ -46,8 +46,75 @@ JOBS_LOCK = threading.Lock()
 # Cleanup old jobs after this many seconds
 JOB_TTL = 1800  # 30 minutes — file is cleaned up on download, this is a fallback
 
+# Every submission costs two upstream fetches and a long Blender run, so
+# submissions are limited per client and Blender runs are limited per process.
+SUBMIT_WINDOW = 10 * 60          # seconds
+SUBMIT_PER_CLIENT = 5            # submissions per client per window
+MAX_PENDING_JOBS = 8             # queued + running jobs on disk before refusing new ones
+BLENDER_CONCURRENCY = int(os.environ.get("BLENDER_CONCURRENCY", "2"))
+# Set when the app sits behind a reverse proxy that appends the client to
+# X-Forwarded-For; without a proxy that header is client-controlled.
+TRUST_PROXY = os.environ.get("TRUST_PROXY", "").lower() in ("1", "true", "yes")
+
+_SUBMITS: dict[str, list[float]] = {}
+_SUBMITS_LOCK = threading.Lock()
+_BLENDER_SLOTS = threading.BoundedSemaphore(BLENDER_CONCURRENCY)
+
+NNID_RE = re.compile(r"^[A-Za-z0-9._-]{1,32}$")
+
+
+def _client_key() -> str:
+    if TRUST_PROXY:
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        last_hop = forwarded.split(",")[-1].strip()
+        if last_hop:
+            return last_hop
+    return request.remote_addr or "unknown"
+
+
+def _submit_allowed(client: str) -> bool:
+    now = time.time()
+    with _SUBMITS_LOCK:
+        recent = [t for t in _SUBMITS.get(client, []) if now - t < SUBMIT_WINDOW]
+        if len(recent) >= SUBMIT_PER_CLIENT:
+            _SUBMITS[client] = recent
+            return False
+        recent.append(now)
+        _SUBMITS[client] = recent
+        # Drop clients that have gone quiet so the map stays small.
+        for key in [k for k, v in _SUBMITS.items() if not v or now - v[-1] >= SUBMIT_WINDOW]:
+            if key != client:
+                _SUBMITS.pop(key, None)
+    return True
+
+
+def _pending_job_count() -> int:
+    count = 0
+    try:
+        for entry in os.listdir(JOBS_DIR):
+            jfile = os.path.join(JOBS_DIR, entry, "job.json")
+            try:
+                with open(jfile, "r", encoding="utf-8") as fh:
+                    if json.load(fh).get("status") in ("queued", "running"):
+                        count += 1
+            except Exception:
+                continue
+    except FileNotFoundError:
+        pass
+    return count
+
+
+def _valid_job_id(job_id: str) -> bool:
+    try:
+        return str(uuid.UUID(job_id)) == job_id
+    except (ValueError, AttributeError, TypeError):
+        return False
+
 
 def _get_job(job_id: str) -> dict | None:
+    # Job IDs are UUIDs the server made; anything else never reaches the filesystem.
+    if not _valid_job_id(job_id):
+        return None
     path = os.path.join(JOBS_DIR, job_id, "job.json")
     if not os.path.exists(path):
         return None
@@ -180,53 +247,58 @@ def _fetch_mii_png(params: dict) -> bytes:
 
 def _run_blender_job(job_id: str, glb_path: str, png_path: str,
                      body_type: str, output_stl: str):
-    """Run the Blender pipeline in a thread and update JOBS."""
+    """Run the Blender pipeline in a thread and update the job file."""
     job = _get_job(job_id) or {}
-    job["status"] = "running"
-    _save_job(job_id, job)
 
-    blender = _blender_exe()
-    if not blender:
-        job["status"] = "error"
-        job["error"] = "Blender not found. Please install Blender."
+    # Wait for a Blender slot so a burst of submissions runs a few at a time.
+    with _BLENDER_SLOTS:
+        job["status"] = "running"
         _save_job(job_id, job)
-        return
 
-    script = os.path.join(os.path.dirname(__file__), "printmiiout.py")
-    cmd = [blender, "-b", "--python", script, "--", glb_path]
-    if body_type in ("m", "f"):
-        cmd.append(body_type)
+        blender = _blender_exe()
+        if not blender:
+            app.logger.error("Blender not found for job %s", job_id)
+            job["status"] = "error"
+            job["error"] = "The 3D converter is not available right now. Please try again later."
+            _save_job(job_id, job)
+            return
 
-    env = os.environ.copy()
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr[-3000:] if result.stderr else "Blender exited with error")
+        script = os.path.join(os.path.dirname(__file__), "printmiiout.py")
+        cmd = [blender, "-b", "--python", script, "--", glb_path]
+        if body_type in ("m", "f"):
+            cmd.append(body_type)
 
-        generated_stl = os.path.splitext(glb_path)[0] + ".stl"
-        if not os.path.exists(generated_stl):
-            raise RuntimeError("STL was not created by Blender script.")
-        shutil.move(generated_stl, output_stl)
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=600,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(result.stderr[-3000:] if result.stderr else "Blender exited with error")
 
-        job["status"] = "done"
-        job["file"] = output_stl
-        job["log"] = result.stdout[-4000:]
-        _save_job(job_id, job)
-    except Exception as exc:
-        job["status"] = "error"
-        job["error"] = str(exc)
-        _save_job(job_id, job)
-    finally:
-        for f in (glb_path, png_path):
-            try:
-                os.unlink(f)
-            except Exception:
-                pass
+            generated_stl = os.path.splitext(glb_path)[0] + ".stl"
+            if not os.path.exists(generated_stl):
+                raise RuntimeError("STL was not created by Blender script.")
+            shutil.move(generated_stl, output_stl)
+
+            job["status"] = "done"
+            job["file"] = output_stl
+            job["log"] = result.stdout[-4000:]
+            _save_job(job_id, job)
+        except Exception as exc:
+            # Details (paths, Blender's stderr) stay in the server log.
+            app.logger.error("Job %s failed: %s", job_id, exc)
+            job["status"] = "error"
+            job["error"] = "Converting this Mii failed. Please try again or try another Mii."
+            _save_job(job_id, job)
+        finally:
+            for f in (glb_path, png_path):
+                try:
+                    os.unlink(f)
+                except Exception:
+                    pass
 
 
 def _detect_mii_gender(raw_bytes: bytes) -> str | None:
@@ -253,7 +325,8 @@ def _start_job(form_params: dict, body_type: str) -> str:
         data_b64 = form_params.get("data")
         if not data_b64 and form_params.get("nnid"):
             try:
-                url = _build_mii_url(f"/mii_data/{form_params['nnid']}", {"api_id": form_params.get("api_id")})
+                from urllib.parse import quote
+                url = _build_mii_url(f"/mii_data/{quote(form_params['nnid'], safe='')}", {"api_id": form_params.get("api_id")})
                 res = requests.get(url, timeout=10)
                 if res.status_code == 200:
                     data_b64 = res.json().get("data")
@@ -339,8 +412,15 @@ def index():
 def submit():
     _cleanup_old_jobs()
 
+    if not _submit_allowed(_client_key()):
+        return jsonify(error="Too many requests. Please wait a few minutes and try again."), 429
+    if _pending_job_count() >= MAX_PENDING_JOBS:
+        return jsonify(error="PrintMiiOut is busy right now. Please try again in a few minutes."), 503
+
     input_type = request.form.get("input_type", "nnid")
     body_type   = request.form.get("body_type", "auto")
+    if body_type not in ("auto", "m", "f", "none"):
+        body_type = "auto"
 
     # Build the API params based on input type
     api_params: dict = {}
@@ -349,12 +429,16 @@ def submit():
         nnid = request.form.get("nnid", "").strip()
         if not nnid:
             return jsonify(error="NNID is required."), 400
+        if not NNID_RE.fullmatch(nnid):
+            return jsonify(error="That doesn't look like a valid NNID."), 400
         api_params["nnid"] = nnid
 
     elif input_type == "pnid":
         pnid = request.form.get("pnid", "").strip()
         if not pnid:
             return jsonify(error="PNID is required."), 400
+        if not NNID_RE.fullmatch(pnid):
+            return jsonify(error="That doesn't look like a valid PNID."), 400
         api_params["nnid"]   = pnid
         api_params["api_id"] = "1"
 
@@ -414,10 +498,15 @@ def submit():
         job_id = _start_job(api_params, body_type)
     except requests.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else 500
-        msg = exc.response.text[:500] if exc.response is not None else str(exc)
-        return jsonify(error=f"Mii API error {status}: {msg}"), 400
+        app.logger.warning("Mii API error %s for %s input", status, input_type)
+        if status == 404:
+            return jsonify(error="No Mii was found for that ID."), 400
+        if 400 <= status < 500:
+            return jsonify(error="The Mii service rejected that input. Please check it and try again."), 400
+        return jsonify(error="The Mii service is unavailable right now. Please try again later."), 502
     except Exception as exc:
-        return jsonify(error=str(exc)), 400
+        app.logger.error("Could not start job: %s", exc)
+        return jsonify(error="Could not start the conversion. Please try again."), 400
 
     return jsonify(job_id=job_id)
 
@@ -511,4 +600,6 @@ def decode_qr():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    # The Werkzeug debugger lets anyone who reaches the page run code, so it
+    # is only on when asked for explicitly.
+    app.run(debug=os.environ.get("FLASK_DEBUG") == "1", port=5000)
