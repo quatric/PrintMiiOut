@@ -241,8 +241,9 @@ def _mii_png_url(params: dict) -> str:
     png_params = dict(params)
     png_params["drawStageMode"] = "mask_only"
     png_params.setdefault("width", "2048")
-    # PNG only uses data/nnid/api_id, not GLB-specific params
-    for k in ("type", "expression", "shaderType", "view_type", "resourceType", "texResolution"):
+    # PNG only uses data/nnid/api_id, not GLB-specific params. It keeps the
+    # expression, since it replaces the mask the GLB draws for it.
+    for k in ("type", "shaderType", "view_type", "resourceType", "texResolution"):
         png_params.pop(k, None)
     return _build_mii_url("/miis/image.png", png_params)
 

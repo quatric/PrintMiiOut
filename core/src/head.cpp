@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <functional>
 #include <limits>
 
 namespace pmo {
@@ -26,7 +28,28 @@ const double kGlassArm = 0.04;
 const double kGlassArmReach = 0.15;
 const double kGlassSink = 0.01;
 
-double luminance(const RGBA& c) { return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }
+// How the face texture is embossed, as in printmiiout.py. Ink (the
+// brightest channel this dark or darker: black and grey lines, dark
+// outlines) stands at full height. Colour (hearts, coins, tongues, a
+// coloured iris or eyebrow) stands at half height, under the ink.
+const double kInkValue = 0.5;
+const double kColourSaturation = 0.2;
+// Share of a feature's area that must be colour before it gets a plateau,
+// so a few tinted edge pixels never lift a black and white feature.
+const double kToneShare = 0.1;
+const double kToneThickness = 1.25, kToneOffset = 0.2;  // 0.75 proud, 0.5 sunk
+
+enum class Ink : uint8_t { None, Dark, Colour, Light };
+
+/** What three texture samples (a grid cell's corners) paint. */
+Ink inkOf(const RGBA& p, const RGBA& q, const RGBA& r) {
+	if (std::max(p.a, std::max(q.a, r.a)) < 0.1f) return Ink::None;
+	double R = (p.r + q.r + r.r) / 3.0, G = (p.g + q.g + r.g) / 3.0, B = (p.b + q.b + r.b) / 3.0;
+	double value = std::max(R, std::max(G, B)), low = std::min(R, std::min(G, B));
+	if (value <= kInkValue) return Ink::Dark;
+	if (value - low >= kColourSaturation) return Ink::Colour;
+	return Ink::Light;  // eye whites, teeth, light grey edges
+}
 
 double percentile(std::vector<double> x, double p) {
 	std::sort(x.begin(), x.end());
@@ -66,7 +89,8 @@ Mesh embossMask(const Mesh& mask, const Image& tex, const Mesh* faceline, const 
 	const int n = kEmbossSegments;
 	const int stride = n + 1;
 	std::vector<int> id(stride * stride);
-	std::vector<float> alpha(stride * stride), lum(stride * stride);
+	std::vector<RGBA> texel(stride * stride);
+	std::vector<Ink> kind;  // per face of out
 	for (size_t fi = 0; fi < mask.f.size(); fi++) {
 		const V3 &A = mask.v[mask.f[fi][0]], &B = mask.v[mask.f[fi][1]], &C = mask.v[mask.f[fi][2]];
 		const V2 &a = mask.uv[fi][0], &b = mask.uv[fi][1], &c = mask.uv[fi][2];
@@ -74,9 +98,8 @@ Mesh embossMask(const Mesh& mask, const Image& tex, const Mesh* faceline, const 
 		for (int i = 0; i <= n; i++)
 			for (int j = 0; i + j <= n; j++) {
 				double s = double(i) / n, t = double(j) / n;
-				RGBA px = tex.nearest(a.u + (b.u - a.u) * s + (c.u - a.u) * t, a.v + (b.v - a.v) * s + (c.v - a.v) * t);
-				alpha[i * stride + j] = px.a;
-				lum[i * stride + j] = float(luminance(px));
+				texel[i * stride + j] =
+				    tex.nearest(a.u + (b.u - a.u) * s + (c.u - a.u) * t, a.v + (b.v - a.v) * s + (c.v - a.v) * t);
 			}
 		auto vert = [&](int i, int j) {
 			int& slot = id[i * stride + j];
@@ -86,13 +109,11 @@ Mesh embossMask(const Mesh& mask, const Image& tex, const Mesh* faceline, const 
 			}
 			return slot;
 		};
-		// Keep what the texture paints opaque and dark, as _cull_by_texture does.
 		auto add = [&](int i0, int j0, int i1, int j1, int i2, int j2) {
-			int p = i0 * stride + j0, q = i1 * stride + j1, r = i2 * stride + j2;
-			float maxA = std::max(alpha[p], std::max(alpha[q], alpha[r]));
-			float avgL = (lum[p] + lum[q] + lum[r]) / 3.0f;
-			if (maxA < 0.1f || avgL > 0.5f) return;
+			Ink k = inkOf(texel[i0 * stride + j0], texel[i1 * stride + j1], texel[i2 * stride + j2]);
+			if (k == Ink::None) return;
 			out.f.push_back({vert(i0, j0), vert(i1, j1), vert(i2, j2)});
+			kind.push_back(k);
 		};
 		for (int i = 0; i < n; i++)
 			for (int j = 0; i + j < n; j++) {
@@ -117,17 +138,44 @@ Mesh embossMask(const Mesh& mask, const Image& tex, const Mesh* faceline, const 
 		}
 	}
 
+	// Which features get a plateau: those that are partly colour, and
+	// those painted entirely in white or grey (light eyebrows), which would
+	// otherwise vanish. Black and white features (eyes with their whites)
+	// get none, so they print exactly as they always have.
 	int count = 0;
-	auto island = faceIslands(out, count);
-	std::vector<double> area(count, 0.0);
-	for (size_t f = 0; f < out.f.size(); f++) area[island[f]] += triangleArea(out, (int)f);
-	keepFaces(out, [&](int f) { return area[island[f]] >= kSpeckArea; });
-	if (out.f.empty()) return out;
+	std::vector<int> island = faceIslands(out, count);
+	std::vector<double> all(count, 0.0), colour(count, 0.0), ink(count, 0.0);
+	for (size_t f = 0; f < out.f.size(); f++) {
+		double area = triangleArea(out, (int)f);
+		all[island[f]] += area;
+		if (kind[f] == Ink::Colour) colour[island[f]] += area;
+		if (kind[f] == Ink::Dark) ink[island[f]] += area;
+	}
+	auto plateau = [&](int f) {
+		int i = island[f];
+		if (kind[f] == Ink::Light) return ink[i] == 0 && colour[i] == 0;
+		return colour[i] >= kToneShare * all[i];
+	};
 
-	smooth(out, 0.6, 25);
-	// Sink 0.5 below the face so features fuse instead of floating on it.
-	solidify(out, 2.0, 0.5);
-	return out;
+	auto shell = [&](const std::function<bool(int)>& keep, double thickness, double offset) {
+		Mesh m = out;
+		m.uv.clear();
+		keepFaces(m, keep);
+		int c = 0;
+		std::vector<int> isl = faceIslands(m, c);
+		std::vector<double> area(c, 0.0);
+		for (size_t f = 0; f < m.f.size(); f++) area[isl[f]] += triangleArea(m, (int)f);
+		keepFaces(m, [&](int f) { return area[isl[f]] >= kSpeckArea; });
+		if (m.f.empty()) return m;
+		smooth(m, 0.6, 25);
+		solidify(m, thickness, offset);
+		return m;
+	};
+	// Dark ink stands 1.5 proud and sinks 0.5 so it fuses with the face;
+	// a plateau stands half as proud, under the ink that outlines it.
+	Mesh relief = shell([&](int f) { return kind[f] == Ink::Dark; }, 2.0, 0.5);
+	relief.append(shell(plateau, kToneThickness, kToneOffset));
+	return relief;
 }
 
 void embossCap(Mesh& cap, const Image& tex) {

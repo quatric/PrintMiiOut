@@ -106,35 +106,46 @@ def _speck_faces(bm, min_area):
     return specks
 
 
-def _cull_by_texture(obj, img):
-    """Keep only the faces the texture paints dark and opaque. The subdivided
-    mask is ~800k faces and most are transparent, so this samples every face
-    at once and rebuilds the mesh from the few that stay."""
+# How the face texture is embossed (core/src/head.cpp does the same). Ink
+# (the brightest channel this dark or darker: black and grey lines, dark
+# outlines) stands at full height. Colour (hearts, coins, tongues, a coloured
+# iris or eyebrow) stands at half height, under the ink.
+EMBOSS_INK = 0.5
+EMBOSS_COLOUR = 0.2
+# Share of a feature's area that must be colour before it gets a plateau, so a
+# few tinted edge pixels never lift a black and white feature.
+EMBOSS_TONE_SHARE = 0.1
+TONE_THICKNESS, TONE_OFFSET = 1.25, 0.2   # 0.75 proud, 0.5 sunk
+
+
+def _face_islands(face_verts, totals, vertex_count):
+    """Island index of each face, faces joining where they share a vertex."""
+    import numpy as np
+    parent = list(range(vertex_count))
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    starts = np.concatenate(([0], np.cumsum(totals)[:-1]))
+    fv = face_verts.tolist()
+    for s, t in zip(starts.tolist(), totals.tolist()):
+        root = find(fv[s])
+        for k in range(s + 1, s + t):
+            r = find(fv[k])
+            if r != root:
+                parent[r] = root
+    roots = np.array([find(fv[s]) for s in starts.tolist()], dtype=np.int64)
+    _, island = np.unique(roots, return_inverse=True)
+    return island
+
+
+def _mesh_from_faces(mesh, keep, loop_verts, totals, name):
+    """A new mesh of mesh's faces where keep is set, without loose specks."""
     import bmesh
     import numpy as np
-
-    mesh = obj.data
-    uv = _loop_uvs(mesh)
-    if uv is None or not len(mesh.polygons):
-        return
-    px = _image_pixels(img)
-    height, width = px.shape[:2]
-    x = (uv[:, 0] * width).astype(np.int64) % width
-    y = (uv[:, 1] * height).astype(np.int64) % height
-    texel = px[y, x]
-    lum = 0.2126 * texel[:, 0] + 0.7152 * texel[:, 1] + 0.0722 * texel[:, 2]
-
-    starts = np.empty(len(mesh.polygons), dtype=np.int32)
-    totals = np.empty(len(mesh.polygons), dtype=np.int32)
-    mesh.polygons.foreach_get("loop_start", starts)
-    mesh.polygons.foreach_get("loop_total", totals)
-    max_alpha = np.maximum.reduceat(texel[:, 3], starts)
-    avg_lum = np.add.reduceat(lum, starts) / totals
-    keep = ~((max_alpha < 0.1) | (avg_lum > 0.5))
-    print(f"Removing {len(keep) - int(keep.sum())} / {len(keep)} transparent faces from {obj.name}")
-
-    loop_verts = np.empty(len(mesh.loops), dtype=np.int32)
-    mesh.loops.foreach_get("vertex_index", loop_verts)
     kept_loops = loop_verts[np.repeat(keep, totals)]
     used, remap = np.unique(kept_loops, return_inverse=True)
     kept_totals = totals[keep]
@@ -143,19 +154,85 @@ def _cull_by_texture(obj, img):
         faces = remap.reshape(-1, int(kept_totals[0])).tolist()
     else:
         faces = [f.tolist() for f in np.split(remap, np.cumsum(kept_totals)[:-1])]
-
-    culled = bpy.data.meshes.new(mesh.name)
-    culled.from_pydata(co.tolist(), [], faces)
+    out = bpy.data.meshes.new(name)
+    out.from_pydata(co.tolist(), [], faces)
     bm = bmesh.new()
-    bm.from_mesh(culled)
+    bm.from_mesh(out)
     specks = _speck_faces(bm, SPECK_AREA)
     if specks:
-        print(f"Removing {len(specks)} speck faces from {obj.name}")
+        print(f"Removing {len(specks)} speck faces from {name}")
         bmesh.ops.delete(bm, geom=specks, context='FACES')
-    bm.to_mesh(culled)
+    bm.to_mesh(out)
     bm.free()
-    obj.data = culled
+    return out
+
+
+def _cull_by_texture(obj, img):
+    """Keep only the faces the texture paints as ink, and return a second
+    object holding the coloured plateaus (or None). The subdivided mask is
+    ~800k faces and most are transparent, so this samples every face at once
+    and rebuilds the meshes from the few that stay."""
+    import numpy as np
+
+    mesh = obj.data
+    uv = _loop_uvs(mesh)
+    if uv is None or not len(mesh.polygons):
+        return None
+    px = _image_pixels(img)
+    height, width = px.shape[:2]
+    x = (uv[:, 0] * width).astype(np.int64) % width
+    y = (uv[:, 1] * height).astype(np.int64) % height
+    texel = px[y, x]
+
+    starts = np.empty(len(mesh.polygons), dtype=np.int32)
+    totals = np.empty(len(mesh.polygons), dtype=np.int32)
+    mesh.polygons.foreach_get("loop_start", starts)
+    mesh.polygons.foreach_get("loop_total", totals)
+    max_alpha = np.maximum.reduceat(texel[:, 3], starts)
+    rgb = np.add.reduceat(texel[:, :3], starts, axis=0) / totals[:, None]
+    value = rgb.max(axis=1)
+    saturation = value - rgb.min(axis=1)
+    painted = max_alpha >= 0.1
+    ink = painted & (value <= EMBOSS_INK)
+    colour = painted & ~ink & (saturation >= EMBOSS_COLOUR)
+    light = painted & ~ink & ~colour   # eye whites, teeth, light grey edges
+    print(f"Removing {len(ink) - int(ink.sum())} / {len(ink)} transparent faces from {obj.name}")
+
+    loop_verts = np.empty(len(mesh.loops), dtype=np.int32)
+    mesh.loops.foreach_get("vertex_index", loop_verts)
+
+    # Which features get a plateau: those that are partly colour, and those
+    # painted entirely in white or grey (light eyebrows), which would
+    # otherwise vanish. Black and white features (eyes with their whites)
+    # get none, so they print exactly as they always have.
+    tone = np.zeros(len(ink), dtype=bool)
+    if colour.any() or light.any():
+        idx = np.nonzero(painted)[0]
+        sel = np.repeat(painted, totals)
+        island = _face_islands(loop_verts[sel], totals[idx], len(mesh.vertices))
+        area = np.empty(len(mesh.polygons), dtype=np.float32)
+        mesh.polygons.foreach_get("area", area)
+        count = int(island.max()) + 1
+        a = area[idx].astype(np.float64)
+        total = np.bincount(island, weights=a, minlength=count)
+        coloured = np.bincount(island, weights=a * colour[idx], minlength=count)
+        inked = np.bincount(island, weights=a * ink[idx], minlength=count)
+        plateau = coloured >= EMBOSS_TONE_SHARE * total
+        bare = (coloured == 0) & (inked == 0)
+        tone[idx] = (((ink | colour)[idx] & plateau[island]) | (light[idx] & bare[island]))
+
+    tone_obj = None
+    if tone.any():
+        tone_mesh = _mesh_from_faces(mesh, tone, loop_verts, totals, mesh.name + "Tone")
+        if len(tone_mesh.polygons):
+            tone_obj = bpy.data.objects.new(obj.name + "Tone", tone_mesh)
+            for col in obj.users_collection:
+                col.objects.link(tone_obj)
+        else:
+            bpy.data.meshes.remove(tone_mesh)
+    obj.data = _mesh_from_faces(mesh, ink, loop_verts, totals, mesh.name)
     bpy.data.meshes.remove(mesh)
+    return tone_obj
 
 
 def _emboss_mask(obj, faceline, img):
@@ -171,29 +248,35 @@ def _emboss_mask(obj, faceline, img):
     for mod in list(obj.modifiers):
         _apply(obj, mod)
 
+    tone = None
     if img and img.channels >= 4:
-        _cull_by_texture(obj, img)
+        tone = _cull_by_texture(obj, img)
 
-    sm = obj.modifiers.new(name="Smooth", type='SMOOTH')
-    sm.iterations = 25
-    sm.factor = 0.6
-    _apply(obj, sm)
+    # Ink stands 1.5 proud and sinks 0.5 so it fuses with the face; a
+    # plateau stands half as proud, under the ink that outlines it.
+    shells = [(obj, 2.0, 0.5)]
+    if tone:
+        shells.append((tone, TONE_THICKNESS, TONE_OFFSET))
+    for shell, thickness, offset in shells:
+        sm = shell.modifiers.new(name="Smooth", type='SMOOTH')
+        sm.iterations = 25
+        sm.factor = 0.6
+        _apply(shell, sm)
 
-    # Sink 0.5 below the face so features fuse instead of floating on it.
-    solid = obj.modifiers.new(name="Solidify", type='SOLIDIFY')
-    solid.thickness = 2.0
-    solid.offset = 0.5
-    _apply(obj, solid)
+        solid = shell.modifiers.new(name="Solidify", type='SOLIDIFY')
+        solid.thickness = thickness
+        solid.offset = offset
+        _apply(shell, solid)
 
-    c_smooth = obj.modifiers.new(name="CorrectiveSmooth", type='CORRECTIVE_SMOOTH')
-    c_smooth.iterations = 30
-    c_smooth.smooth_type = 'LENGTH_WEIGHTED'
-    c_smooth.factor = 1.0
-    _apply(obj, c_smooth)
+        c_smooth = shell.modifiers.new(name="CorrectiveSmooth", type='CORRECTIVE_SMOOTH')
+        c_smooth.iterations = 30
+        c_smooth.smooth_type = 'LENGTH_WEIGHTED'
+        c_smooth.factor = 1.0
+        _apply(shell, c_smooth)
 
-    subsurf2 = obj.modifiers.new(name="Subsurf2", type='SUBSURF')
-    subsurf2.levels = 1
-    _apply(obj, subsurf2)
+        subsurf2 = shell.modifiers.new(name="Subsurf2", type='SUBSURF')
+        subsurf2.levels = 1
+        _apply(shell, subsurf2)
 
 
 # Glasses sizes are fractions of head width, like the print sizes further down.
