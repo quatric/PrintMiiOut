@@ -7,6 +7,7 @@ PrintMiiOut converts Nintendo Mii characters into 3D-printable STL models. Enter
 - **Blender 3D Pipeline**: Processes GLB meshes with smoothing modifiers and fuses everything into one watertight solid for 3D printing.
 - **True Body Proportions**: The body follows the Mii's own height and build, scaled bone by bone the way Nintendo's editor scales it (the same rules as [FFL.js](https://github.com/ariankordi/FFL.js)). Arms, legs, wrists and ankles are held at a printable minimum thickness, so a very short, slim Mii keeps its look without snapping. An "Average" option uses the middle height and build instead.
 - **Printable Glasses**: Glasses become a flat frame that rests on the face, with temple arms holding it to the head.
+- **Build in Your Browser (beta)**: The same pipeline in C++ ([core/](core/README.md)), compiled to WebAssembly with [assimp](https://github.com/assimp/assimp) reading the Mii and writing the STL. The browser fetches the Mii straight from the Mii API and builds the model itself, so it never waits in the server's queue.
 - **Web Interface**: Clean, responsive web UI built with Flask and Vanilla CSS.
 
 ## Checking the body against FFL.js
@@ -22,8 +23,21 @@ It writes the FFL.js figure as an STL and a PNG, and with `--stl` a front and si
 
 To check the body alone: `python miibody.py miiBodyF_wiiu_plain.glb body.stl --height 28 --build 55` matches the body in the reference STL to within float precision.
 
+## Building in the browser
+
+`core/` is the pipeline without Blender, in C++: assimp imports the head and body GLBs and exports the STL, and the rest (smoothing, the face emboss, glasses, the body, fusing into one solid, simplifying) is our own code. It builds a command line tool for checking it against Blender and a WebAssembly module that the site runs in a Web Worker. The built module is checked in under `static/client/`, so the site needs no build step; see [core/README.md](core/README.md) to rebuild it.
+
+The bodies the browser uses (`static/client/miiBody{M,F}.glb`) are the game's bodies re-saved without mesh quantization, which assimp cannot read, and with the standing pose baked in:
+
+```bash
+python tools/bake_body.py miiBodyM_wiiu_plain.glb static/client/miiBodyM.glb
+python tools/bake_body.py miiBodyF_wiiu_plain.glb static/client/miiBodyF.glb
+```
+
+To compare two STLs side by side (say Blender's and the core's), `tools/reference` takes `--a blender.stl --b core.stl`, with `--face` or `--box x0,y0,z0,x1,y1,z1` to zoom in.
+
 ## Credits
-- **3D processing**: Powered by Blender.
+- **3D processing**: Powered by Blender, and in the browser by [assimp](https://github.com/assimp/assimp) and [stb_image](https://github.com/nothings/stb).
 - **Body scaling**: Rules from [FFL.js](https://github.com/ariankordi/FFL.js) by Arian Kordi, after Nintendo's own editor body.
 - **Display font**: [Nintendo U Version 3](https://www.deviantart.com/dledeviant/art/Nintendo-U-Version-3-595000916) by dledeviant, free for non-commercial use.
 - **Background tiles**: from [mii-unsecure](https://mii-unsecure.ariankordi.net/) by Arian Kordi, used with permission.

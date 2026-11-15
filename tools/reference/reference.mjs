@@ -7,6 +7,11 @@
  *        [--height 0-127] [--build 0-127] [--body m|f] [--pose Finish]
  *        [--stl ours.stl] [--out out/name]
  *
+ *   node reference.mjs --a blender.stl --b core.stl [--face | --box x0,y0,z0,x1,y1,z1]
+ *        [--out out/name]
+ *        compares two STLs instead, with no FFL.js figure; --face frames
+ *        the face only, --box any region (same units as the STLs).
+ *
  * Writes:
  *   <out>-ref.stl      the reference figure: opaque head shapes and the
  *                      scaled, posed body, in the head's own units with the
@@ -214,7 +219,12 @@ async function renderRGBA(renderer, scene, camera, w, h) {
 	const px = /** @type {Uint8Array} */ (await renderer.readRenderTargetPixelsAsync(rt, 0, 0, w, h));
 	renderer.setRenderTarget(null);
 	rt.dispose();
-	return new Uint8Array(px);
+	// WebGPU pads each row to 256 bytes; drop the padding.
+	const stride = Math.ceil(w * 4 / 256) * 256;
+	if (stride === w * 4 || px.length < stride * (h - 1) + w * 4) return new Uint8Array(px);
+	const out = new Uint8Array(w * h * 4);
+	for (let y = 0; y < h; y++) out.set(px.subarray(y * stride, y * stride + w * 4), y * w * 4);
+	return out;
 }
 
 function shadedScene(tris, colour) {
@@ -315,6 +325,65 @@ function encodePNG(px, w, h) {
 }
 
 // ---------------------------------------------------------------------------
+// Two STLs side by side
+// ---------------------------------------------------------------------------
+
+async function compareSTLs(values) {
+	const zoom = values.face || !!values.box;
+	const W = Number(values.width), H = zoom ? W : W * 3 / 2;
+	await fs.mkdir(path.dirname(values.out), { recursive: true });
+	addWebGPUExtensions();
+	const renderer = await createThreeRenderer();
+	renderer.onDeviceLost = () => {};
+	try {
+		const a = decodeSTL(await fs.readFile(values.a));
+		const b = decodeSTL(await fs.readFile(values.b));
+		const ba = bounds(a), bb = bounds(b);
+		const box = {
+			min: ba.min.map((x, k) => Math.min(x, bb.min[k])),
+			max: ba.max.map((x, k) => Math.max(x, bb.max[k]))
+		};
+		if (values.face) {
+			// The head sits at the origin; frame its front half.
+			box.min = [-36, 0, -10];
+			box.max = [36, 60, 30];
+		} else if (values.box) {
+			const v = values.box.split(',').map(Number);
+			if (v.length !== 6 || v.some(Number.isNaN)) throw new Error('--box wants six numbers');
+			box.min = v.slice(0, 3);
+			box.max = v.slice(3);
+		}
+		const metrics = {};
+		const rows = [];
+		const views = zoom
+			? [['front', new THREE.Vector3(0, 0, 1)], ['angle', new THREE.Vector3(0.7, 0.15, 0.7).normalize()]]
+			: [['front', new THREE.Vector3(0, 0, 1)], ['side', new THREE.Vector3(1, 0, 0)]];
+		for (const [name, dir] of views) {
+			const cam = viewCamera(box, dir, W, H);
+			if (!zoom) {
+				const o = overlap(await renderRGBA(renderer, silhouetteScene(a), cam, W, H),
+					await renderRGBA(renderer, silhouetteScene(b), cam, W, H), W, H);
+				metrics[`iou_${name}`] = +o.iou.toFixed(4);
+			}
+			rows.push(tile([
+				onWhite(await renderRGBA(renderer, shadedScene(a, 0xd8a070), cam, W, H)),
+				onWhite(await renderRGBA(renderer, shadedScene(b, 0x70a0d8), cam, W, H))
+			], W, H));
+		}
+		const img = stack(rows);
+		await fs.writeFile(`${values.out}-ab.png`, encodePNG(img.px, img.w, img.h));
+		console.log(JSON.stringify({ a: a.length / 9, b: b.length / 9, ...metrics }));
+	} finally {
+		renderer.dispose();
+		const device = /** @type {any} */ (renderer.backend).device;
+		if (device instanceof GPUDevice) {
+			await device.queue.onSubmittedWorkDone();
+			device.destroy();
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
 // The reference figure
 // ---------------------------------------------------------------------------
 
@@ -329,9 +398,17 @@ async function main() {
 			pose: { type: 'string', default: 'Finish' },
 			stl: { type: 'string' },
 			out: { type: 'string', short: 'o', default: 'out/mii' },
-			width: { type: 'string', default: '512' }
+			width: { type: 'string', default: '512' },
+			a: { type: 'string' },
+			b: { type: 'string' },
+			face: { type: 'boolean', default: false },
+			box: { type: 'string' }
 		}
 	});
+	if (values.a && values.b) {
+		await compareSTLs(values);
+		return;
+	}
 	if (!values.resource || !values.data) {
 		console.error('usage: node reference.mjs --resource AFLResHigh_2_3.dat --data <hex|base64> [--height N] [--build N] [--body m|f] [--pose Finish] [--stl ours.stl] [--out out/name]');
 		process.exit(1);

@@ -558,6 +558,14 @@
             </div>
             <div class="field-note">Very short, slim Miis keep their size, with arms and legs kept thick enough to print.</div>
           </div>
+          <div class="field field-wide" id="where-field" hidden>
+            <span class="label" id="where-label">Build on</span>
+            <div class="gender-row" role="group" aria-labelledby="where-label">
+              <button class="gender-btn selected" data-where="server"  type="button" aria-pressed="true">Our server</button>
+              <button class="gender-btn"          data-where="browser" type="button" aria-pressed="false">Your browser (beta)</button>
+            </div>
+            <div class="field-note">Your browser builds the same model itself, with no queue. It needs a few seconds and up to 1&nbsp;GB of memory.</div>
+          </div>
         </div>
       </article>
 
@@ -568,7 +576,7 @@
           <img src="{{ url_for('static', filename='yeah.webp') }}" alt="" width="39" height="36">
           Yeah! Print it
         </button>
-        <p class="yeah-note">Blender usually takes under a minute. You can doodle while it works.</p>
+        <p class="yeah-note" id="yeah-note">Blender usually takes under a minute. You can doodle while it works.</p>
       </div>
     </form>
 
@@ -621,7 +629,7 @@
     </section>
     <section class="px">
       <h2>Credits</h2>
-      <p>3D processing via Blender.</p>
+      <p>3D processing via Blender, or in your browser with <a href="https://github.com/assimp/assimp" target="_blank" rel="noopener">assimp</a> and WebAssembly.</p>
       <p>Mii rendering powered by <a href="https://mii-unsecure.ariankordi.net/" target="_blank" rel="noopener">mii-unsecure.ariankordi.net</a> by Arian Kordi.</p>
       <p><a href="https://github.com/quatric/PrintMiiOut/" target="_blank" rel="noopener">Source Code</a></p>
     </section>
@@ -676,10 +684,19 @@
   // ── Body and proportions toggles ──────────────────────────────────────────
   let bodyGender = 'auto';
   let bodyProportions = 'mii';
+  let buildWhere = 'server';
+  // Building in the browser needs WebAssembly and module workers.
+  document.getElementById('where-field').hidden = !(typeof WebAssembly === 'object' && 'Worker' in window);
   document.querySelectorAll('.gender-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (btn.dataset.gender) bodyGender = btn.dataset.gender;
       if (btn.dataset.proportions) bodyProportions = btn.dataset.proportions;
+      if (btn.dataset.where) {
+        buildWhere = btn.dataset.where;
+        document.getElementById('yeah-note').textContent = buildWhere === 'browser'
+          ? 'Your browser usually takes under half a minute. You can doodle while it works.'
+          : 'Blender usually takes under a minute. You can doodle while it works.';
+      }
       btn.closest('.gender-row').querySelectorAll('.gender-btn').forEach(b => {
         b.classList.toggle('selected', b === btn);
         b.setAttribute('aria-pressed', b === btn);
@@ -777,6 +794,7 @@
   const downloadLink= document.getElementById('download-link');
   let pollTimer = null;
   let polledJob = null;
+  let builtUrl = null;  // the last STL built in the browser
 
   function showError(msg) {
     errorBox.textContent = msg;
@@ -833,6 +851,22 @@
     statusText.textContent = 'Fetching Mii data from the API…';
     setStage('progress');
 
+    if (buildWhere === 'browser') {
+      try {
+        const { buildInBrowser } = await import("{{ url_for('static', filename='client/browser-build.js') }}");
+        const stl = await buildInBrowser(fd, text => { statusText.textContent = text; });
+        if (builtUrl) URL.revokeObjectURL(builtUrl);
+        builtUrl = URL.createObjectURL(stl);
+        downloadLink.href = builtUrl;
+        downloadLink.download = 'printmiiout.stl';
+        setStage('result');
+      } catch (err) {
+        setStage('input');
+        showError(err.message);
+      }
+      return;
+    }
+
     let jobId;
     try {
       const res = await fetch('/submit', { method: 'POST', body: fd });
@@ -883,6 +917,7 @@
 
         if (json.status === 'done') {
           polledJob = null;
+          downloadLink.removeAttribute('download');
           downloadLink.href = `/download/${jobId}`;
           setStage('result');
           return;
@@ -908,6 +943,10 @@
   document.getElementById('btn-again').addEventListener('click', () => {
     if (pollTimer) clearTimeout(pollTimer);
     polledJob = null;
+    if (builtUrl) {
+      URL.revokeObjectURL(builtUrl);
+      builtUrl = null;
+    }
     setStage('input');
     btnSubmit.disabled = false;
     uploadedFileB64 = null;

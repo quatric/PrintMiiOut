@@ -228,12 +228,28 @@ def _build_mii_url(endpoint: str, params: dict) -> str:
     return f"{MII_API_BASE}{endpoint}?{urlencode(qs)}"
 
 
-def _fetch_mii_glb(params: dict) -> bytes:
-    """Fetch the Mii head .glb from the remote API."""
+def _mii_glb_url(params: dict) -> str:
+    """The Mii head .glb on the remote API."""
     glb_params = dict(params)
     glb_params.setdefault("resourceType", "very_high")
     glb_params.setdefault("texResolution", "2048")
-    url = _build_mii_url("/miis/image.glb", glb_params)
+    return _build_mii_url("/miis/image.glb", glb_params)
+
+
+def _mii_png_url(params: dict) -> str:
+    """The Mii face texture .png (mask_only) on the remote API."""
+    png_params = dict(params)
+    png_params["drawStageMode"] = "mask_only"
+    png_params.setdefault("width", "2048")
+    # PNG only uses data/nnid/api_id, not GLB-specific params
+    for k in ("type", "expression", "shaderType", "view_type", "resourceType", "texResolution"):
+        png_params.pop(k, None)
+    return _build_mii_url("/miis/image.png", png_params)
+
+
+def _fetch_mii_glb(params: dict) -> bytes:
+    """Fetch the Mii head .glb from the remote API."""
+    url = _mii_glb_url(params)
     app.logger.info("Fetching GLB: %s", url)
     r = _HTTP.get(url, timeout=60)
     r.raise_for_status()
@@ -242,13 +258,7 @@ def _fetch_mii_glb(params: dict) -> bytes:
 
 def _fetch_mii_png(params: dict) -> bytes:
     """Fetch the Mii face texture .png (mask_only) from the remote API."""
-    png_params = dict(params)
-    png_params["drawStageMode"] = "mask_only"
-    png_params.setdefault("width", "2048")
-    # PNG only uses data/nnid/api_id, not GLB-specific params
-    for k in ("type", "expression", "shaderType", "view_type", "resourceType", "texResolution"):
-        png_params.pop(k, None)
-    url = _build_mii_url("/miis/image.png", png_params)
+    url = _mii_png_url(params)
     app.logger.info("Fetching PNG: %s", url)
     r = _HTTP.get(url, timeout=60)
     r.raise_for_status()
@@ -334,12 +344,9 @@ def _mii_traits(form_params: dict) -> dict:
     return {"gender": None, "height": miidata.AVERAGE, "build": miidata.AVERAGE}
 
 
-def _start_job(form_params: dict, body_type: str, proportions: str = "mii") -> str:
-    """Fetch assets, start Blender thread, return job_id."""
-    # The model, the mask and the Mii lookup are independent upstream
-    # requests, so they run side by side instead of one after another.
-    glb_future = _FETCH_POOL.submit(_fetch_mii_glb, form_params)
-    png_future = _FETCH_POOL.submit(_fetch_mii_png, form_params)
+def _body_for(form_params: dict, body_type: str, proportions: str) -> tuple[str, int, int]:
+    """The body to build ("m", "f" or "none") and the height and build to
+    give it, looking the Mii up when the choice depends on it."""
     traits = {"gender": None, "height": miidata.AVERAGE, "build": miidata.AVERAGE}
     if body_type == "auto" or proportions == "mii":
         traits = _mii_traits(form_params)
@@ -347,6 +354,17 @@ def _start_job(form_params: dict, body_type: str, proportions: str = "mii") -> s
         body_type = traits["gender"] or "m"
     if proportions != "mii":
         traits["height"] = traits["build"] = miidata.AVERAGE
+    return body_type, traits["height"], traits["build"]
+
+
+def _start_job(form_params: dict, body_type: str, proportions: str = "mii") -> str:
+    """Fetch assets, start Blender thread, return job_id."""
+    # The model, the mask and the Mii lookup are independent upstream
+    # requests, so they run side by side instead of one after another.
+    glb_future = _FETCH_POOL.submit(_fetch_mii_glb, form_params)
+    png_future = _FETCH_POOL.submit(_fetch_mii_png, form_params)
+    body_type, height, build = _body_for(form_params, body_type, proportions)
+    traits = {"height": height, "build": build}
     glb_data = glb_future.result()
     png_data = png_future.result()
 
@@ -419,6 +437,7 @@ ROBOTS_TXT = (
     "User-agent: *\n"
     "Allow: /\n"
     "Disallow: /submit\n"
+    "Disallow: /resolve\n"
     "Disallow: /status/\n"
     "Disallow: /download/\n"
     "Disallow: /decode-qr\n"
@@ -441,6 +460,7 @@ LLMS_TXT = f"""# PrintMiiOut (printmiiout.com)
 
 - [The tool]({SITE_URL}/): enter a Nintendo Network ID (NNID) or Pretendo Network ID (PNID), upload a binary .mii / .ffsd file, or upload a Mii QR code image. Conversion usually takes under a minute.
 - Glasses print as a flat frame that rests on the face, with temple arms holding it to the head.
+- The model can also be built in the visitor's own browser (beta): the same pipeline compiled to WebAssembly, with assimp reading the Mii and writing the STL.
 - The body follows the Mii's own height and build, scaled bone by bone as Nintendo's editor scales it, with arms and legs held thick enough to print. An "Average" option uses the middle height and build instead.
 
 ## Source
@@ -468,15 +488,9 @@ def llms_txt():
     return _text(LLMS_TXT, "text/plain")
 
 
-@app.route("/submit", methods=["POST"])
-def submit():
-    _cleanup_old_jobs()
-
-    if not _submit_allowed(_client_key()):
-        return jsonify(error="Too many requests. Please wait a few minutes and try again."), 429
-    if _pending_job_count() >= MAX_PENDING_JOBS:
-        return jsonify(error="PrintMiiOut is busy right now. Please try again in a few minutes."), 503
-
+def _parse_form() -> tuple[tuple[dict, str, str] | None, str | None]:
+    """The Mii API params, body type and proportions a /submit or /resolve
+    form asks for, or an error message for the user."""
     input_type = request.form.get("input_type", "nnid")
     body_type   = request.form.get("body_type", "auto")
     if body_type not in ("auto", "m", "f", "none"):
@@ -491,17 +505,17 @@ def submit():
     if input_type == "nnid":
         nnid = request.form.get("nnid", "").strip()
         if not nnid:
-            return jsonify(error="NNID is required."), 400
+            return None, "NNID is required."
         if not NNID_RE.fullmatch(nnid):
-            return jsonify(error="That doesn't look like a valid NNID."), 400
+            return None, "That doesn't look like a valid NNID."
         api_params["nnid"] = nnid
 
     elif input_type == "pnid":
         pnid = request.form.get("pnid", "").strip()
         if not pnid:
-            return jsonify(error="PNID is required."), 400
+            return None, "PNID is required."
         if not NNID_RE.fullmatch(pnid):
-            return jsonify(error="That doesn't look like a valid PNID."), 400
+            return None, "That doesn't look like a valid PNID."
         api_params["nnid"]   = pnid
         api_params["api_id"] = "1"
 
@@ -515,7 +529,7 @@ def submit():
         elif data_text:
             api_params["data"] = _normalize_mii_data(data_text)
         else:
-            return jsonify(error="No Mii data provided."), 400
+            return None, "No Mii data provided."
 
     elif input_type == "qr":
         qr_text = request.form.get("qr_text", "").strip()
@@ -526,7 +540,7 @@ def submit():
             try:
                 raw_bytes = _decode_qr_image(qr_file)
             except Exception as exc:
-                return jsonify(error=f"QR Image Error: {str(exc)}"), 400
+                return None, f"QR Image Error: {str(exc)}"
         elif qr_text:
             import base64
             try:
@@ -535,20 +549,20 @@ def submit():
                 else:
                     raw_bytes = base64.b64decode(qr_text)
             except Exception:
-                return jsonify(error="Invalid hex or base64 QR data pasted."), 400
+                return None, "Invalid hex or base64 QR data pasted."
         else:
-            return jsonify(error="Please upload a QR code image or paste scanned QR data."), 400
+            return None, "Please upload a QR code image or paste scanned QR data."
 
         try:
             decrypted = _decrypt_mii_qr_bytes(raw_bytes)
         except Exception as exc:
-            return jsonify(error=f"QR Decryption Error: {str(exc)}"), 400
+            return None, f"QR Decryption Error: {str(exc)}"
 
         import base64
         api_params["data"] = base64.b64encode(decrypted).decode()
 
     else:
-        return jsonify(error="Unknown input type."), 400
+        return None, "Unknown input type."
 
     # Expression param for GLB (using default view and shader)
     # Names from the swagger docs, or numeric Miitomo expression ids
@@ -557,11 +571,28 @@ def submit():
         expression = "normal"
     api_params["expression"] = expression
 
+    return (api_params, body_type, proportions), None
+
+
+@app.route("/submit", methods=["POST"])
+def submit():
+    _cleanup_old_jobs()
+
+    if not _submit_allowed(_client_key()):
+        return jsonify(error="Too many requests. Please wait a few minutes and try again."), 429
+    if _pending_job_count() >= MAX_PENDING_JOBS:
+        return jsonify(error="PrintMiiOut is busy right now. Please try again in a few minutes."), 503
+
+    form, error = _parse_form()
+    if error:
+        return jsonify(error=error), 400
+    api_params, body_type, proportions = form
+
     try:
         job_id = _start_job(api_params, body_type, proportions)
     except requests.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else 500
-        app.logger.warning("Mii API error %s for %s input", status, input_type)
+        app.logger.warning("Mii API error %s for %s input", status, request.form.get("input_type", "nnid"))
         if status == 404:
             return jsonify(error="No Mii was found for that ID."), 400
         if 400 <= status < 500:
@@ -572,6 +603,25 @@ def submit():
         return jsonify(error="Could not start the conversion. Please try again."), 400
 
     return jsonify(job_id=job_id)
+
+
+@app.route("/resolve", methods=["POST"])
+def resolve():
+    """For building in the browser: where to fetch the Mii and which body,
+    height and build to give it. Takes the same form as /submit and runs
+    nothing; the browser fetches the files from the Mii API itself."""
+    form, error = _parse_form()
+    if error:
+        return jsonify(error=error), 400
+    api_params, body_type, proportions = form
+    body_type, height, build = _body_for(api_params, body_type, proportions)
+    return jsonify(
+        glb=_mii_glb_url(api_params),
+        png=_mii_png_url(api_params),
+        body=None if body_type == "none" else body_type,
+        height=height,
+        build=build,
+    )
 
 
 @app.route("/status/<job_id>")
