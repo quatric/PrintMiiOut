@@ -4,12 +4,27 @@ PrintMiiOut converts Nintendo Mii characters into 3D-printable STL models. Enter
 
 ## Features
 - **Multiple Input Sources**: Fetch Miis by Nintendo Network ID (NNID), Pretendo Network ID (PNID), binary `.mii` / `.ffsd` files, or QR code images.
-- **Blender 3D Pipeline**: Processes GLB meshes with armature-bone attachment and smoothing modifiers for 3D printing.
+- **Blender 3D Pipeline**: Processes GLB meshes with smoothing modifiers and fuses everything into one watertight solid for 3D printing.
+- **True Body Proportions**: The body follows the Mii's own height and build, scaled bone by bone the way Nintendo's editor scales it (the same rules as [FFL.js](https://github.com/ariankordi/FFL.js)). Arms, legs, wrists and ankles are held at a printable minimum thickness, so a very short, slim Mii keeps its look without snapping. An "Average" option uses the middle height and build instead.
 - **Printable Glasses**: Glasses become a flat frame that rests on the face, with temple arms holding it to the head.
 - **Web Interface**: Clean, responsive web UI built with Flask and Vanilla CSS.
 
+## Checking the body against FFL.js
+
+`miibody.py` poses and scales the body GLBs with plain numpy, following FFL.js bone for bone. `tools/reference` renders the same Mii with FFL.js itself, headless on WebGPU, and compares it with any STL from the pipeline:
+
+```bash
+cd tools/reference && npm install
+node reference.mjs --resource AFLResHigh_2_3.dat --data <hex or base64> --stl ../../mii_head.stl --out out/mii
+```
+
+It writes the FFL.js figure as an STL and a PNG, and with `--stl` a front and side comparison (`out/mii-compare.png`) with silhouette overlap scores. `--height`, `--build` and `--body m|f` override the Mii's own values. The FFL resource file (`AFLResHigh_2_3.dat` or `FFLResHigh.dat`) comes from your own console and is not included.
+
+To check the body alone: `python miibody.py miiBodyF_wiiu_plain.glb body.stl --height 28 --build 55` matches the body in the reference STL to within float precision.
+
 ## Credits
 - **3D processing**: Powered by Blender.
+- **Body scaling**: Rules from [FFL.js](https://github.com/ariankordi/FFL.js) by Arian Kordi, after Nintendo's own editor body.
 - **Display font**: [Nintendo U Version 3](https://www.deviantart.com/dledeviant/art/Nintendo-U-Version-3-595000916) by dledeviant, free for non-commercial use.
 - **Background tiles**: from [mii-unsecure](https://mii-unsecure.ariankordi.net/) by Arian Kordi, used with permission.
 - **Mii rendering**: Powered by [mii-unsecure.ariankordi.net](https://mii-unsecure.ariankordi.net/) by Arian Kordi.

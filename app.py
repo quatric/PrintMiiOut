@@ -24,6 +24,8 @@ from flask import (
     jsonify, abort, url_for, Response
 )
 
+import miidata
+
 load_dotenv()
 
 sentry_dsn = os.environ.get("SENTRY_DSN")
@@ -254,7 +256,8 @@ def _fetch_mii_png(params: dict) -> bytes:
 
 
 def _run_blender_job(job_id: str, glb_path: str, png_path: str,
-                     body_type: str, output_stl: str):
+                     body_type: str, output_stl: str,
+                     height: int = 64, build: int = 64):
     """Run the Blender pipeline in a thread and update the job file."""
     job = _get_job(job_id) or {}
 
@@ -275,7 +278,7 @@ def _run_blender_job(job_id: str, glb_path: str, png_path: str,
         # Factory settings skip the user's preferences and add-ons at startup.
         cmd = [blender, "-b", "--factory-startup", "--python", script, "--", glb_path]
         if body_type in ("m", "f"):
-            cmd.append(body_type)
+            cmd += [body_type, "--height", str(int(height)), "--build", str(int(build))]
 
         try:
             result = subprocess.run(
@@ -310,53 +313,40 @@ def _run_blender_job(job_id: str, glb_path: str, png_path: str,
                     pass
 
 
-def _detect_mii_gender(raw_bytes: bytes) -> str | None:
-    """Detect Mii gender ('m' or 'f') from binary data."""
-    try:
-        if len(raw_bytes) in (96, 74):
-            return 'f' if (raw_bytes[0x18] & 1) != 0 else 'm'
-        elif len(raw_bytes) == 76:
-            return 'f' if (raw_bytes[0] & 0x40) != 0 else 'm'
-        elif len(raw_bytes) == 46:
-            return 'f' if raw_bytes[22] == 1 else 'm'
-        elif len(raw_bytes) == 88:
-            return 'f' if raw_bytes[0x11] == 1 else 'm'
-    except Exception:
-        pass
-    return None
-
-
-def _detect_body_type(form_params: dict) -> str:
-    """Pick the body from the Mii's own gender, looking the Mii up if needed."""
-    import base64
-    data_b64 = form_params.get("data")
-    if not data_b64 and form_params.get("nnid"):
+def _mii_traits(form_params: dict) -> dict:
+    """The Mii's gender, height and build, looking the Mii up if needed.
+    Unknown formats and failed lookups give no gender and average proportions."""
+    data = form_params.get("data")
+    if not data and form_params.get("nnid"):
         try:
             from urllib.parse import quote
             url = _build_mii_url(f"/mii_data/{quote(form_params['nnid'], safe='')}", {"api_id": form_params.get("api_id")})
             res = _HTTP.get(url, timeout=10)
             if res.status_code == 200:
-                data_b64 = res.json().get("data")
+                data = res.json().get("data")
         except Exception:
             pass
-    if data_b64:
+    if data:
         try:
-            gen = _detect_mii_gender(base64.b64decode(data_b64))
-            if gen:
-                return gen
+            return miidata.traits(miidata.decode(data))
         except Exception:
             pass
-    return "m"  # Default fallback
+    return {"gender": None, "height": miidata.AVERAGE, "build": miidata.AVERAGE}
 
 
-def _start_job(form_params: dict, body_type: str) -> str:
+def _start_job(form_params: dict, body_type: str, proportions: str = "mii") -> str:
     """Fetch assets, start Blender thread, return job_id."""
-    # The model, the mask and the gender lookup are independent upstream
+    # The model, the mask and the Mii lookup are independent upstream
     # requests, so they run side by side instead of one after another.
     glb_future = _FETCH_POOL.submit(_fetch_mii_glb, form_params)
     png_future = _FETCH_POOL.submit(_fetch_mii_png, form_params)
+    traits = {"gender": None, "height": miidata.AVERAGE, "build": miidata.AVERAGE}
+    if body_type == "auto" or proportions == "mii":
+        traits = _mii_traits(form_params)
     if body_type == "auto":
-        body_type = _detect_body_type(form_params)
+        body_type = traits["gender"] or "m"
+    if proportions != "mii":
+        traits["height"] = traits["build"] = miidata.AVERAGE
     glb_data = glb_future.result()
     png_data = png_future.result()
 
@@ -382,7 +372,7 @@ def _start_job(form_params: dict, body_type: str) -> str:
 
     t = threading.Thread(
         target=_run_blender_job,
-        args=(job_id, glb_path, png_path, body_type, out_stl),
+        args=(job_id, glb_path, png_path, body_type, out_stl, traits["height"], traits["build"]),
         daemon=True,
     )
     t.start()
@@ -451,6 +441,7 @@ LLMS_TXT = f"""# PrintMiiOut (printmiiout.com)
 
 - [The tool]({SITE_URL}/): enter a Nintendo Network ID (NNID) or Pretendo Network ID (PNID), upload a binary .mii / .ffsd file, or upload a Mii QR code image. Conversion usually takes under a minute.
 - Glasses print as a flat frame that rests on the face, with temple arms holding it to the head.
+- The body follows the Mii's own height and build, scaled bone by bone as Nintendo's editor scales it, with arms and legs held thick enough to print. An "Average" option uses the middle height and build instead.
 
 ## Source
 
@@ -490,6 +481,9 @@ def submit():
     body_type   = request.form.get("body_type", "auto")
     if body_type not in ("auto", "m", "f", "none"):
         body_type = "auto"
+    proportions = request.form.get("proportions", "mii")
+    if proportions not in ("mii", "average"):
+        proportions = "mii"
 
     # Build the API params based on input type
     api_params: dict = {}
@@ -564,7 +558,7 @@ def submit():
     api_params["expression"] = expression
 
     try:
-        job_id = _start_job(api_params, body_type)
+        job_id = _start_job(api_params, body_type, proportions)
     except requests.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else 500
         app.logger.warning("Mii API error %s for %s input", status, input_type)

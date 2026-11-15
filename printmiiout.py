@@ -17,6 +17,8 @@ except ModuleNotFoundError:
     cmd = [blender_exe, "-b", "--factory-startup", "--python", os.path.abspath(__file__), "--"] + sys.argv[1:]
     sys.exit(subprocess.call(cmd))
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Mask texture noise leaves islands under ~0.35 GLB units²; real features are 1+.
 SPECK_AREA = 0.5
 
@@ -428,7 +430,8 @@ def _merge_head(opaque_objs, close_neck):
     return head
 
 
-def process_glb(input_glb, output_stl, body_type=None, with_base=True):
+def process_glb(input_glb, output_stl, body_type=None, with_base=True, height=64, build=64):
+    """height and build (0-127, as the Mii stores them) scale the body."""
     print(f"Processing: {input_glb} -> {output_stl}")
     input_glb = os.path.abspath(input_glb)
     output_stl = os.path.abspath(output_stl)
@@ -546,7 +549,7 @@ def process_glb(input_glb, output_stl, body_type=None, with_base=True):
     has_body = False
     if body_type:
         print(f"\n=== Attaching body (type={body_type}) ===")
-        has_body = _attach_body(body_type, head)
+        has_body = _attach_body(body_type, head, height, build)
         _tick("body")
 
     _make_printable(head_width, with_base=has_body and with_base)
@@ -568,6 +571,13 @@ BASE_RADIUS = 0.45
 BASE_HEIGHT = 0.05
 BASE_SINK = 0.025
 BODY_THICKEN = 0.006
+# Thinnest an arm, leg, wrist or ankle may get, as a radius. An average Mii's
+# ankles are 0.03 to 0.043 of the head's width, depending on the hair; the
+# shortest, slightest Mii scales them to under half that, which snaps once
+# printed.
+MIN_LIMB_RADIUS = 0.03
+BODY_SEAM_WELD = 0.003   # gap between the torso and legs rims that still welds
+BODY_POSE = "Finish"     # the editor's standing pose, as Blender imports it
 MIN_ISLAND = 0.01
 MAX_TRIS = 600_000
 REMESH_ADAPTIVITY = 0.03
@@ -679,105 +689,80 @@ def _make_printable(unit, with_base):
     print(f"Printable: {len(mesh.polygons):,} faces, {open_e} non-manifold edges")
 
 
-def _attach_body(body_type, head):
-    """Load the body GLB, apply armature pose, scale/position and close it,
-    overlapping the head so the fuse step joins them. Returns False if no body."""
+def _tilt_head(rotation):
+    """Turn everything built so far (head, glasses) about the head's origin,
+    the way FFL.js turns the head model with the posed head bone."""
+    import numpy as np
+
+    for o in bpy.context.scene.objects:
+        if o.type != 'MESH':
+            continue
+        co = _coords(o.data).astype(np.float64) @ rotation.T
+        o.data.vertices.foreach_set("co", co.astype(np.float32).ravel())
+        o.data.update()
+
+
+def _attach_body(body_type, head, height, build):
+    """Pose and scale the body as the Mii's height and build make it (FFL.js's
+    per-bone scaling, see miibody.py), stand it under the head the way FFL.js
+    attaches the head, and close it, overlapping the head so the fuse step
+    joins them. Returns False if there is no body."""
     import bmesh
     import numpy as np
-    from mathutils import Matrix
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    body_glb = os.path.join(script_dir, f"miiBody{'M' if body_type == 'm' else 'F'}_wiiu_plain.glb")
+    sys.path.insert(0, SCRIPT_DIR)
+    import miibody
+
+    body_glb = os.path.join(SCRIPT_DIR, f"miiBody{'M' if body_type == 'm' else 'F'}_wiiu_plain.glb")
     if not os.path.exists(body_glb):
         print(f"Error: Body model not found: {body_glb}")
         return False
 
     hv = _coords(head.data)
-    head_cx    = float((hv[:, 0].min() + hv[:, 0].max()) / 2)
-    head_cy    = float((hv[:, 1].min() + hv[:, 1].max()) / 2)
-    head_zmin  = float(hv[:, 2].min())
     head_width = float(hv[:, 0].max() - hv[:, 0].min())
-    print(f"Head: W={head_width:.2f} zmin={head_zmin:.2f} (closed)")
 
-    # --- Import body GLB, bake armature pose ---
-    existing_objs = set(bpy.context.scene.objects)
-    bpy.ops.import_scene.gltf(filepath=body_glb)
+    body = miibody.Body(body_glb, height=height, build=build, pose=BODY_POSE)
+    moved = body.thicken_limbs(head_width * MIN_LIMB_RADIUS / miibody.HEAD_TO_BODY)
+    print(f"Body: height={height} build={build} scale={np.round(body.scale, 3).tolist()}, "
+          f"{moved} limb vertices held at the printable minimum, head tilted {body.head_tilt():.1f} deg")
 
-    imported = [o for o in bpy.context.scene.objects if o not in existing_objs]
-    body_objs = [o for o in imported if o.type == 'MESH' and len(o.data.vertices) >= 100]
-    print(f"Body meshes: {[o.name for o in body_objs]}")
-    if not body_objs:
-        print(f"Error: No body mesh in {body_glb}")
-        return False
+    # glTF is Y up, Blender Z up: (x, y, z) -> (x, -z, y).
+    to_z_up = np.array(((1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, 1.0, 0.0)))
+    _tilt_head(to_z_up @ body.head_rotation() @ to_z_up.T)
 
-    arm_objs = [o for o in imported if o.type == 'ARMATURE']
-    bone_loc = None
-    if arm_objs:
-        arm = arm_objs[0]
-        if 'head' in arm.data.bones:
-            bone_loc = arm.matrix_world @ arm.data.bones['head'].head_local
-            print(f"Found armature head bone at: {bone_loc}")
+    verts, faces, at = [], [], 0
+    for _name, v, tris in body.in_head_frame(upright=True):
+        verts.append(v @ to_z_up.T)
+        faces.append(tris + at)
+        at += len(v)
+    mesh = bpy.data.meshes.new("Body")
+    mesh.from_pydata(np.concatenate(verts).tolist(), [], np.concatenate(faces).tolist())
+    body_obj = bpy.data.objects.new("Body", mesh)
+    bpy.context.scene.collection.objects.link(body_obj)
 
-    # Bake the armature pose and the world transform into plain meshes.
-    depsgraph = bpy.context.evaluated_depsgraph_get()
-    for o in body_objs:
-        posed = o.evaluated_get(depsgraph)
-        mesh = bpy.data.meshes.new_from_object(posed)
-        mesh.transform(posed.matrix_world)
-        o.modifiers.clear()
-        o.data = mesh
-    for o in imported:
-        if o in body_objs:
-            o.parent = None
-            o.matrix_world = Matrix.Identity(4)
-        else:
-            # The armature, and helper meshes that are not part of the body.
-            bpy.data.objects.remove(o, do_unlink=True)
-    bpy.context.view_layer.update()
+    # The torso and legs share a ring of vertices at the waist (or the skirt
+    # hem), and the neck is left open inside the head. Weld only open edges,
+    # so thin limbs never collapse, then fill whatever is still open.
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=head_width * 1e-5)
+    rim = list({v for e in bm.edges if e.is_boundary for v in e.verts})
+    bmesh.ops.remove_doubles(bm, verts=rim, dist=head_width * BODY_SEAM_WELD)
+    open_e = [e for e in bm.edges if e.is_boundary]
+    before = len(open_e)
+    if open_e:
+        bmesh.ops.holes_fill(bm, edges=open_e, sides=10000)
+    after = sum(1 for e in bm.edges if e.is_boundary)
+    bm.to_mesh(mesh)
+    mesh.update()
+    bm.free()
+    print(f"Body after waist weld: {before} open edges, {after} after fill")
+    body = body_obj
 
-    # Compute combined body bounds for scaling
-    av = np.concatenate([_coords(o.data) for o in body_objs])
-    body_width = float(av[:, 0].max() - av[:, 0].min())
-    body_cx = float((av[:, 0].min() + av[:, 0].max()) / 2)
-    body_cy = float((av[:, 1].min() + av[:, 1].max()) / 2)
-    body_zmax = float(av[:, 2].max())
-
-    # Scale body to 90% of head width
-    scale = (head_width * 0.90) / body_width
-    if bone_loc is not None:
-        # Attach directly to the armature head bone position at origin (0, 0, 0)
-        dx = -bone_loc.x * scale
-        dy = -bone_loc.y * scale
-        dz = -bone_loc.z * scale
-        print(f"Body W={body_width:.3f} scale={scale:.4f} attached to head bone: ({dx:.2f}, {dy:.2f}, {dz:.2f})")
-    else:
-        dx = head_cx - body_cx * scale
-        dy = head_cy - body_cy * scale
-        dz = head_zmin - body_zmax * scale + 15.0
-        print(f"Body W={body_width:.3f} scale={scale:.4f} manual bounds offset")
-
-    for o in body_objs:
-        co = _coords(o.data) * scale + np.array((dx, dy, dz), dtype=np.float32)
-        o.data.vertices.foreach_set("co", co.ravel())
-        o.data.update()
-
-    # --- Merge body pieces, weld torso-legs seam, close body independently ---
-    body = body_objs[0]
-    if len(body_objs) > 1:
-        bpy.ops.object.select_all(action='DESELECT')
-        for o in body_objs:
-            o.select_set(True)
-        bpy.context.view_layer.objects.active = body
-        bpy.ops.object.join()
-        bpy.ops.object.select_all(action='DESELECT')
-
-    def close(mesh, weld=None):
+    def close(mesh):
         bm = bmesh.new()
         bm.from_mesh(mesh)
-        if weld:
-            bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=weld)
         open_e = [e for e in bm.edges if e.is_boundary]
-        before = len(open_e)
         if open_e:
             bmesh.ops.holes_fill(bm, edges=open_e, sides=10000)
         after = sum(1 for e in bm.edges if e.is_boundary)
@@ -785,16 +770,13 @@ def _attach_body(body_type, head):
         bm.to_mesh(mesh)
         mesh.update()
         bm.free()
-        return before, after, faces
-
-    before, after, _ = close(body.data, weld=1.5)
-    print(f"Body after torso-legs weld: {before} open edges, {after} after fill")
+        return after, faces
 
     # Subdivide body for smooth surface
     _apply(body, _subsurf(body, 3, name='Sub'))
 
     # Fill any holes opened by subdivision
-    _, after, faces = close(body.data)
+    after, faces = close(body.data)
     print(f"  {body.name}: {after} open edges, {faces:,} faces")
 
     # Thin ankles, wrists and the skirt hem snap once the figure is scaled down.
@@ -813,6 +795,18 @@ if __name__ == "__main__":
 
     with_base = "--no-base" not in args
     args = [a for a in args if a != "--no-base"]
+
+    # --height N / --build N: the Mii's own height and build (0-127).
+    traits = {"height": 64, "build": 64}
+    for key in traits:
+        flag = f"--{key}"
+        if flag in args:
+            at = args.index(flag)
+            try:
+                traits[key] = max(0, min(127, int(args[at + 1])))
+            except (IndexError, ValueError):
+                print(f"Warning: {flag} needs a number from 0 to 127")
+            del args[at:at + 2]
 
     # Check if last arg is body type (m or f)
     body_type = None
@@ -847,4 +841,4 @@ if __name__ == "__main__":
 
     for input_glb in targets:
         output_stl = os.path.splitext(input_glb)[0] + ".stl"
-        process_glb(input_glb, output_stl, body_type=body_type, with_base=with_base)
+        process_glb(input_glb, output_stl, body_type=body_type, with_base=with_base, **traits)

@@ -1,0 +1,12 @@
+{
+  "name": "printmiiout-reference",
+  "private": true,
+  "type": "module",
+  "description": "Headless FFL.js renders of a Mii with its body scaled as Nintendo's libraries scale it, to check PrintMiiOut's models against.",
+  "license": "AGPL-3.0-only",
+  "dependencies": {
+    "ffl.js": "github:ariankordi/FFL.js#4b62d7e",
+    "three": "0.184.0",
+    "webgpu": "0.6.1"
+  }
+}

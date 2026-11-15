@@ -257,6 +257,7 @@
     #qr-status[data-state="error"] { color: var(--ink); text-decoration: underline wavy; text-underline-offset: 4px; }
 
     .options { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .options .field-wide { grid-column: 1 / -1; margin-top: 0; }
     .gender-row { display: flex; gap: 12px; flex-wrap: wrap; padding: 3px; }
 
     .error-box {
@@ -549,6 +550,14 @@
               <button class="gender-btn"          data-gender="f"    type="button" aria-pressed="false">Female</button>
             </div>
           </div>
+          <div class="field field-wide">
+            <span class="label" id="proportions-label">Proportions</span>
+            <div class="gender-row" role="group" aria-labelledby="proportions-label">
+              <button class="gender-btn selected" data-proportions="mii"     type="button" aria-pressed="true">Their height &amp; build</button>
+              <button class="gender-btn"          data-proportions="average" type="button" aria-pressed="false">Average</button>
+            </div>
+            <div class="field-note">Very short, slim Miis keep their size, with arms and legs kept thick enough to print.</div>
+          </div>
         </div>
       </article>
 
@@ -664,12 +673,14 @@
     });
   });
 
-  // ── Gender toggle ─────────────────────────────────────────────────────────
+  // ── Body and proportions toggles ──────────────────────────────────────────
   let bodyGender = 'auto';
+  let bodyProportions = 'mii';
   document.querySelectorAll('.gender-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      bodyGender = btn.dataset.gender;
-      document.querySelectorAll('.gender-btn').forEach(b => {
+      if (btn.dataset.gender) bodyGender = btn.dataset.gender;
+      if (btn.dataset.proportions) bodyProportions = btn.dataset.proportions;
+      btn.closest('.gender-row').querySelectorAll('.gender-btn').forEach(b => {
         b.classList.toggle('selected', b === btn);
         b.setAttribute('aria-pressed', b === btn);
       });
@@ -783,6 +794,7 @@
     const fd = new FormData();
     fd.append('input_type', activeTab);
     fd.append('body_type',  bodyGender);
+    fd.append('proportions', bodyProportions);
     fd.append('expression', document.getElementById('expression').value);
 
     if (activeTab === 'nnid') {
