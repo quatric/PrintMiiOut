@@ -14,6 +14,8 @@ import uuid
 import time
 import json
 
+from concurrent.futures import ThreadPoolExecutor
+
 import requests
 from dotenv import load_dotenv
 import sentry_sdk
@@ -55,6 +57,12 @@ BLENDER_CONCURRENCY = int(os.environ.get("BLENDER_CONCURRENCY", "2"))
 # Set when the app sits behind a reverse proxy that appends the client to
 # X-Forwarded-For; without a proxy that header is client-controlled.
 TRUST_PROXY = os.environ.get("TRUST_PROXY", "").lower() in ("1", "true", "yes")
+
+# One session keeps the connection to the Mii API open between requests, and
+# the pool lets a submission fetch everything it needs from it at once.
+_HTTP = requests.Session()
+_HTTP.mount("https://", requests.adapters.HTTPAdapter(pool_maxsize=16))
+_FETCH_POOL = ThreadPoolExecutor(max_workers=16)
 
 _SUBMITS: dict[str, list[float]] = {}
 _SUBMITS_LOCK = threading.Lock()
@@ -225,7 +233,7 @@ def _fetch_mii_glb(params: dict) -> bytes:
     glb_params.setdefault("texResolution", "2048")
     url = _build_mii_url("/miis/image.glb", glb_params)
     app.logger.info("Fetching GLB: %s", url)
-    r = requests.get(url, timeout=60)
+    r = _HTTP.get(url, timeout=60)
     r.raise_for_status()
     return r.content
 
@@ -240,7 +248,7 @@ def _fetch_mii_png(params: dict) -> bytes:
         png_params.pop(k, None)
     url = _build_mii_url("/miis/image.png", png_params)
     app.logger.info("Fetching PNG: %s", url)
-    r = requests.get(url, timeout=60)
+    r = _HTTP.get(url, timeout=60)
     r.raise_for_status()
     return r.content
 
@@ -264,7 +272,8 @@ def _run_blender_job(job_id: str, glb_path: str, png_path: str,
             return
 
         script = os.path.join(os.path.dirname(__file__), "printmiiout.py")
-        cmd = [blender, "-b", "--python", script, "--", glb_path]
+        # Factory settings skip the user's preferences and add-ons at startup.
+        cmd = [blender, "-b", "--factory-startup", "--python", script, "--", glb_path]
         if body_type in ("m", "f"):
             cmd.append(body_type)
 
@@ -317,33 +326,39 @@ def _detect_mii_gender(raw_bytes: bytes) -> str | None:
     return None
 
 
+def _detect_body_type(form_params: dict) -> str:
+    """Pick the body from the Mii's own gender, looking the Mii up if needed."""
+    import base64
+    data_b64 = form_params.get("data")
+    if not data_b64 and form_params.get("nnid"):
+        try:
+            from urllib.parse import quote
+            url = _build_mii_url(f"/mii_data/{quote(form_params['nnid'], safe='')}", {"api_id": form_params.get("api_id")})
+            res = _HTTP.get(url, timeout=10)
+            if res.status_code == 200:
+                data_b64 = res.json().get("data")
+        except Exception:
+            pass
+    if data_b64:
+        try:
+            gen = _detect_mii_gender(base64.b64decode(data_b64))
+            if gen:
+                return gen
+        except Exception:
+            pass
+    return "m"  # Default fallback
+
+
 def _start_job(form_params: dict, body_type: str) -> str:
     """Fetch assets, start Blender thread, return job_id."""
+    # The model, the mask and the gender lookup are independent upstream
+    # requests, so they run side by side instead of one after another.
+    glb_future = _FETCH_POOL.submit(_fetch_mii_glb, form_params)
+    png_future = _FETCH_POOL.submit(_fetch_mii_png, form_params)
     if body_type == "auto":
-        import base64
-        body_type = "m"  # Default fallback
-        data_b64 = form_params.get("data")
-        if not data_b64 and form_params.get("nnid"):
-            try:
-                from urllib.parse import quote
-                url = _build_mii_url(f"/mii_data/{quote(form_params['nnid'], safe='')}", {"api_id": form_params.get("api_id")})
-                res = requests.get(url, timeout=10)
-                if res.status_code == 200:
-                    data_b64 = res.json().get("data")
-            except Exception:
-                pass
-        if data_b64:
-            try:
-                raw = base64.b64decode(data_b64)
-                gen = _detect_mii_gender(raw)
-                if gen:
-                    body_type = gen
-            except Exception:
-                pass
-
-    # Fetch GLB
-    glb_data = _fetch_mii_glb(form_params)
-    png_data = _fetch_mii_png(form_params)
+        body_type = _detect_body_type(form_params)
+    glb_data = glb_future.result()
+    png_data = png_future.result()
 
     # Write to temp files
     job_id = str(uuid.uuid4())

@@ -546,7 +546,7 @@
           <img src="{{ url_for('static', filename='yeah.webp') }}" alt="" width="39" height="36">
           Yeah! Print it
         </button>
-        <p class="yeah-note">Blender takes 1 to 3 minutes. You can doodle while it works.</p>
+        <p class="yeah-note">Blender usually takes under a minute. You can doodle while it works.</p>
       </div>
     </form>
 
@@ -751,6 +751,7 @@
   const statusText  = document.getElementById('status-text');
   const downloadLink= document.getElementById('download-link');
   let pollTimer = null;
+  let polledJob = null;
 
   function showError(msg) {
     errorBox.textContent = msg;
@@ -844,33 +845,43 @@
   });
 
   function pollStatus(jobId) {
-    statusText.textContent = 'Running Blender pipeline… (this may take 1 to 3 minutes)';
-    pollTimer = setInterval(async () => {
+    statusText.textContent = 'Running Blender pipeline… (usually done in under a minute)';
+    const started = Date.now();
+    polledJob = jobId;
+    const check = async () => {
+      if (polledJob !== jobId) return;
       try {
         const res  = await fetch(`/status/${jobId}`);
         const json = await res.json();
+        if (polledJob !== jobId) return;
 
         if (json.status === 'done') {
-          clearInterval(pollTimer);
+          polledJob = null;
           downloadLink.href = `/download/${jobId}`;
           setStage('result');
+          return;
 
         } else if (json.status === 'error') {
-          clearInterval(pollTimer);
+          polledJob = null;
           setStage('input');
           showError('Blender error: ' + (json.error || 'Unknown error.'));
           btnSubmit.disabled = false;
+          return;
         }
         // still 'queued' or 'running' - keep polling
       } catch (e) {
         // network hiccup, keep going
       }
-    }, 3000);
+      // A model takes seconds, so check often at first and ease off if it queues.
+      pollTimer = setTimeout(check, Date.now() - started < 20000 ? 500 : 2000);
+    };
+    pollTimer = setTimeout(check, 500);
   }
 
   // ── Start over ────────────────────────────────────────────────────────────
   document.getElementById('btn-again').addEventListener('click', () => {
-    if (pollTimer) clearInterval(pollTimer);
+    if (pollTimer) clearTimeout(pollTimer);
+    polledJob = null;
     setStage('input');
     btnSubmit.disabled = false;
     uploadedFileB64 = null;

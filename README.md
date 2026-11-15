@@ -5,6 +5,7 @@ PrintMiiOut converts Nintendo Mii characters into 3D-printable STL models. Enter
 ## Features
 - **Multiple Input Sources**: Fetch Miis by Nintendo Network ID (NNID), Pretendo Network ID (PNID), binary `.mii` / `.ffsd` files, or QR code images.
 - **Blender 3D Pipeline**: Processes GLB meshes with armature-bone attachment and smoothing modifiers for 3D printing.
+- **Printable Glasses**: Glasses become a flat frame that rests on the face, with temple arms holding it to the head.
 - **Web Interface**: Clean, responsive web UI built with Flask and Vanilla CSS.
 
 ## Credits
