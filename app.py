@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 import sentry_sdk
 from flask import (
     Flask, render_template, request, send_file,
-    jsonify, abort, url_for
+    jsonify, abort, url_for, Response
 )
 
 load_dotenv()
@@ -421,6 +421,60 @@ def _cleanup_old_jobs():
 @app.route("/", methods=["GET"])
 def index():
     return render_template("index.html")
+
+
+SITE_URL = "https://printmiiout.com"
+
+ROBOTS_TXT = (
+    "User-agent: *\n"
+    "Allow: /\n"
+    "Disallow: /submit\n"
+    "Disallow: /status/\n"
+    "Disallow: /download/\n"
+    "Disallow: /decode-qr\n"
+    "\n"
+    f"Sitemap: {SITE_URL}/sitemap.xml\n"
+)
+
+SITEMAP_XML = (
+    '<?xml version="1.0" encoding="UTF-8"?>\n'
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    f"  <url><loc>{SITE_URL}/</loc></url>\n"
+    "</urlset>\n"
+)
+
+LLMS_TXT = f"""# PrintMiiOut (printmiiout.com)
+
+> A free web tool that turns a Nintendo Mii into a 3D-printable STL file. It fetches the Mii, builds a head and body in Blender and returns an STL for a slicer.
+
+## Using it
+
+- [The tool]({SITE_URL}/): enter a Nintendo Network ID (NNID) or Pretendo Network ID (PNID), upload a binary .mii / .ffsd file, or upload a Mii QR code image. Conversion usually takes under a minute.
+- Glasses print as a flat frame that rests on the face, with temple arms holding it to the head.
+
+## Source
+
+- [Code on GitHub](https://github.com/quatric/PrintMiiOut): licensed under the GNU AGPL v3. Fonts, images and Mii artwork keep their own terms.
+"""
+
+
+def _text(body, mimetype):
+    return Response(body, mimetype=mimetype, headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.route("/robots.txt")
+def robots_txt():
+    return _text(ROBOTS_TXT, "text/plain")
+
+
+@app.route("/sitemap.xml")
+def sitemap_xml():
+    return _text(SITEMAP_XML, "application/xml")
+
+
+@app.route("/llms.txt")
+def llms_txt():
+    return _text(LLMS_TXT, "text/plain")
 
 
 @app.route("/submit", methods=["POST"])
