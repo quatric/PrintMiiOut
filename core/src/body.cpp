@@ -1,4 +1,5 @@
 #include "body.hpp"
+#include "split.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -155,6 +156,7 @@ Body::Body(const uint8_t* glb, size_t size, int height, int build) {
 				part.f.push_back({(int)face.mIndices[0], (int)face.mIndices[1], (int)face.mIndices[2]});
 		}
 		parts_.push_back(std::move(part));
+		partNames_.push_back(am->mName.C_Str());
 		dominant_.push_back(std::move(dom));
 	}
 	if (parts_.empty()) throw std::runtime_error("body: no skinned meshes");
@@ -192,6 +194,40 @@ int Body::thickenLimbs(double minRadius) {
 		}
 	}
 	return moved;
+}
+
+std::vector<std::vector<int>> Body::faceTags() const {
+	auto tagOfBone = [&](int node) {
+		if (node < 0) return int(kTagTorso);
+		const std::string& n = nodes_[node].name;
+		if (n == kHeadBone) return int(kTagNeck);
+		bool arm = n.rfind("arm_", 0) == 0 || n.rfind("elbow_", 0) == 0 || n.rfind("wrist_", 0) == 0;
+		if (arm) return int(n.find("_l") != std::string::npos ? kTagArmL : kTagArmR);  // arm_l1, wrist_l
+		if (n.rfind("foot_", 0) == 0 || n.rfind("knee_", 0) == 0 || n.rfind("ankle_", 0) == 0) return int(kTagLegs);
+		return int(kTagTorso);  // chest, hip and the shoulders, which stay on the torso
+	};
+	std::vector<std::vector<int>> out(parts_.size());
+	for (size_t p = 0; p < parts_.size(); p++) {
+		// The legs mesh is one piece, the tops tucked under the shirt or skirt included.
+		bool legs = partNames_[p].rfind("legs", 0) == 0;
+		for (const Tri& t : parts_[p].f) {
+			if (legs) {
+				out[p].push_back(kTagLegs);
+				continue;
+			}
+			// The tag most of the corners have; with three different, the first.
+			int a = tagOfBone(dominant_[p][t[0]]), b = tagOfBone(dominant_[p][t[1]]),
+			    c = tagOfBone(dominant_[p][t[2]]);
+			out[p].push_back(b == c ? b : a);
+		}
+	}
+	return out;
+}
+
+V3 Body::jointInHeadFrame(const std::string& name) const {
+	int i = find(name);
+	if (i < 0 || !isJoint_[i]) throw std::runtime_error("body: no joint " + name);
+	return (scaled_[i].translation() - head_.translation()) * kHeadToBody;
 }
 
 std::vector<Mesh> Body::inHeadFrame() const {

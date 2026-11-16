@@ -513,8 +513,11 @@ def _merge_head(opaque_objs, close_neck):
     return head
 
 
-def process_glb(input_glb, output_stl, body_type=None, with_base=True, height=64, build=64):
-    """height and build (0-127, as the Mii stores them) scale the body."""
+def process_glb(input_glb, output_stl, body_type=None, with_base=True, height=64, build=64,
+                split=False, assembled=False):
+    """height and build (0-127, as the Mii stores them) scale the body.
+    split prints the figure as pieces that snap together (_make_pieces);
+    assembled puts them together instead of laying them out, for checking."""
     print(f"Processing: {input_glb} -> {output_stl}")
     input_glb = os.path.abspath(input_glb)
     output_stl = os.path.abspath(output_stl)
@@ -629,13 +632,16 @@ def process_glb(input_glb, output_stl, body_type=None, with_base=True, height=64
     if glass_quads:
         _tick("glasses")
 
-    has_body = False
+    rig = None
     if body_type:
         print(f"\n=== Attaching body (type={body_type}) ===")
-        has_body = _attach_body(body_type, head, height, build)
+        rig = _attach_body(body_type, head, height, build)
         _tick("body")
 
-    _make_printable(head_width, with_base=has_body and with_base)
+    if rig and split:
+        _make_pieces(head_width, rig, with_base=with_base, assembled=assembled)
+    else:
+        _make_printable(head_width, with_base=rig is not None and with_base)
     _export_stl(output_stl)
     _tick("export")
     print(f"Done: {output_stl}")
@@ -697,44 +703,33 @@ def _tri_count(mesh):
     return len(mesh.loops) - 2 * len(mesh.polygons)
 
 
-def _make_printable(unit, with_base):
-    """Fuse every shell into one watertight solid, so slicers never have to
-    guess at overlaps, gaps or open edges."""
+def _fuse_solid(solid, unit):
+    """Voxel remesh one object into a watertight solid, sand off the voxel
+    steps and drop loose specks. Returns the solid and how many specks went."""
     import bmesh
-    import numpy as np
 
-    parts = [o for o in bpy.context.scene.objects if o.type == 'MESH']
-    if with_base:
-        parts.append(_add_base(parts, unit))
-
-    bpy.ops.object.select_all(action='DESELECT')
-    for o in parts:
-        o.select_set(True)
-    bpy.context.view_layer.objects.active = parts[0]
-    bpy.ops.object.join()
-    solid = bpy.context.view_layer.objects.active
-    solid.name = "PrintMiiOut"
-
+    name = solid.name
     remesh = solid.modifiers.new("Fuse", type='REMESH')
     remesh.mode = 'VOXEL'
     remesh.voxel_size = unit * VOXEL_SIZE
     remesh.adaptivity = REMESH_ADAPTIVITY
-    bpy.ops.object.modifier_apply(modifier=remesh.name)
-    print(f"Fused: {_tri_count(solid.data):,} triangles")
-    _tick("fuse")
+    _apply(solid, remesh)
 
     # Voxels leave a stair-step on feature edges; two passes sand it off.
     sand = solid.modifiers.new("Sand", type='SMOOTH')
     sand.factor = 0.5
     sand.iterations = 2
-    bpy.ops.object.modifier_apply(modifier=sand.name)
+    _apply(solid, sand)
 
     # Specks left over from the texture emboss would print as loose blobs.
+    bpy.ops.object.select_all(action='DESELECT')
+    solid.select_set(True)
+    bpy.context.view_layer.objects.active = solid
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.mesh.separate(type='LOOSE')
     bpy.ops.object.mode_set(mode='OBJECT')
-    islands = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+    islands = [o for o in bpy.context.selected_objects if o.type == 'MESH']
     volumes = {}
     for o in islands:
         bm = bmesh.new()
@@ -746,30 +741,475 @@ def _make_printable(unit, with_base):
     for o in islands:
         if o not in keep:
             bpy.data.objects.remove(o, do_unlink=True)
-    print(f"Fused into {len(keep)} solid(s), dropped {len(islands) - len(keep)} specks")
+    return _join(keep, name), len(islands) - len(keep)
 
+
+def _join(objs, name):
+    """Joins objects into the first of them."""
     bpy.ops.object.select_all(action='DESELECT')
-    for o in keep:
+    for o in objs:
         o.select_set(True)
-    bpy.context.view_layer.objects.active = keep[0]
-    if len(keep) > 1:
+    bpy.context.view_layer.objects.active = objs[0]
+    if len(objs) > 1:
         bpy.ops.object.join()
-    solid = bpy.context.view_layer.objects.active
-    _tick("drop specks")
+    out = bpy.context.view_layer.objects.active
+    out.name = name
+    return out
 
+
+def _slim(solid, max_tris):
     tris = _tri_count(solid.data)
-    if tris > MAX_TRIS:
+    if tris > max_tris:
         slim = solid.modifiers.new("Slim", type='DECIMATE')
-        slim.ratio = MAX_TRIS / tris
+        slim.ratio = max_tris / tris
         slim.use_collapse_triangulate = True
-        bpy.ops.object.modifier_apply(modifier=slim.name)
+        _apply(solid, slim)
+
+
+def _open_edges(mesh):
+    import numpy as np
+    edge_use = np.empty(len(mesh.loops), dtype=np.int32)
+    mesh.loops.foreach_get("edge_index", edge_use)
+    return int((np.bincount(edge_use, minlength=len(mesh.edges)) != 2).sum())
+
+
+def _make_printable(unit, with_base):
+    """Fuse every shell into one watertight solid, so slicers never have to
+    guess at overlaps, gaps or open edges."""
+    parts = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+    if with_base:
+        parts.append(_add_base(parts, unit))
+
+    solid = _join(parts, "PrintMiiOut")
+    solid, dropped = _fuse_solid(solid, unit)
+    _tick("fuse")
+    print(f"Fused into one solid, dropped {dropped} specks")
+
+    if _tri_count(solid.data) > MAX_TRIS:
+        _slim(solid, MAX_TRIS)
         _tick("slim")
 
     mesh = solid.data
-    edge_use = np.empty(len(mesh.loops), dtype=np.int32)
-    mesh.loops.foreach_get("edge_index", edge_use)
-    open_e = int((np.bincount(edge_use, minlength=len(mesh.edges)) != 2).sum())
-    print(f"Printable: {len(mesh.polygons):,} faces, {open_e} non-manifold edges")
+    print(f"Printable: {len(mesh.polygons):,} faces, {_open_edges(mesh)} non-manifold edges")
+
+
+def _object_from(name, V, F):
+    """A new object from vertices and faces (triangles as an array, or a list
+    of polygons)."""
+    import numpy as np
+
+    mesh = bpy.data.meshes.new(name)
+    if isinstance(F, np.ndarray) and F.ndim == 2 and F.shape[1] == 3:
+        mesh.vertices.add(len(V))
+        mesh.vertices.foreach_set("co", np.asarray(V, dtype=np.float32).ravel())
+        mesh.loops.add(3 * len(F))
+        mesh.loops.foreach_set("vertex_index", F.astype(np.int32).ravel())
+        mesh.polygons.add(len(F))
+        mesh.polygons.foreach_set("loop_start", np.arange(0, 3 * len(F), 3, dtype=np.int32))
+        mesh.update(calc_edges=True)
+    else:
+        mesh.from_pydata(np.asarray(V).tolist(), [], [list(map(int, f)) for f in F])
+        mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    return obj
+
+
+def _triangles(obj, attribute=None):
+    """An object's vertices and triangles as arrays, with a face attribute
+    per triangle if asked."""
+    import numpy as np
+
+    mesh = obj.data
+    mesh.calc_loop_triangles()
+    n = len(mesh.loop_triangles)
+    F = np.empty(n * 3, dtype=np.int32)
+    mesh.loop_triangles.foreach_get("vertices", F)
+    V = _coords(mesh).astype(np.float64)
+    if attribute is None:
+        return V, F.reshape(-1, 3).astype(np.int64)
+    poly = np.empty(n, dtype=np.int32)
+    mesh.loop_triangles.foreach_get("polygon_index", poly)
+    values = np.zeros(len(mesh.polygons), dtype=np.int32)
+    if attribute in mesh.attributes:
+        mesh.attributes[attribute].data.foreach_get("value", values)
+    return V, F.reshape(-1, 3).astype(np.int64), values[poly]
+
+
+def _close(obj):
+    """Fills every hole (the cuts) and points every face outward."""
+    import bmesh
+
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    open_e = [e for e in bm.edges if e.is_boundary]
+    if open_e:
+        bmesh.ops.holes_fill(bm, edges=open_e, sides=0)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(obj.data)
+    obj.data.update()
+    bm.free()
+
+
+def _tidy(obj):
+    """Drops the slivers booleans leave and triangulates, so the STL's
+    triangles share every edge in pairs."""
+    import bmesh
+
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.dissolve_degenerate(bm, dist=1e-5, edges=bm.edges[:])
+    bmesh.ops.triangulate(bm, faces=bm.faces[:], quad_method='BEAUTY', ngon_method='BEAUTY')
+    bm.to_mesh(obj.data)
+    obj.data.update()
+    bm.free()
+
+
+_SOLVER = []
+
+
+def _subtract(obj, cutter):
+    """Cuts cutter out of obj and deletes cutter. Uses Blender's Manifold
+    boolean (4.5 and later) when both are closed, which is fast, and Exact
+    otherwise."""
+    import numpy as np
+
+    if not _SOLVER:
+        solvers = {i.identifier for i in bpy.types.BooleanModifier.bl_rna.properties["solver"].enum_items}
+        _SOLVER.append("MANIFOLD" in solvers)
+    a, b = _coords(obj.data), _coords(cutter.data)
+    if len(a) and len(b) and (a.min(0) < b.max(0)).all() and (b.min(0) < a.max(0)).all():
+        mod = obj.modifiers.new("Cut", type='BOOLEAN')
+        mod.operation = 'DIFFERENCE'
+        closed = _open_edges(obj.data) == 0 and _open_edges(cutter.data) == 0
+        mod.solver = 'MANIFOLD' if _SOLVER[0] and closed else 'EXACT'
+        mod.object = cutter
+        _apply(obj, mod)
+    bpy.data.objects.remove(cutter, do_unlink=True)
+
+
+def _sweep_cutter(src, back, travel, unit, clip=None, spare=None):
+    """What a piece covers on its way into place, grown by the clearance
+    pieces need to slide past each other: copies of it moved back along
+    back up to travel, fused into one solid. clip=(point, normal) keeps only
+    the side of a plane the normal points away from; spare=(point, normal,
+    radius, slab) leaves out a disc around a joint, so the piece it cuts
+    keeps its own joint face."""
+    import bmesh
+    import numpy as np
+    import miisplit
+
+    obj = bpy.data.objects.new(src.name + " path", src.data.copy())
+    bpy.context.scene.collection.objects.link(obj)
+    if clip is not None:
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], dist=1e-6,
+                               plane_co=clip[0], plane_no=clip[1], clear_outer=True)
+        open_e = [e for e in bm.edges if e.is_boundary]
+        if open_e:
+            bmesh.ops.holes_fill(bm, edges=open_e, sides=0)
+        bm.to_mesh(obj.data)
+        bm.free()
+        if not obj.data.polygons:
+            bpy.data.objects.remove(obj, do_unlink=True)
+            return None
+    grow = obj.modifiers.new("Grow", type='DISPLACE')
+    grow.mid_level = 0.0
+    grow.strength = miisplit.SLIDE_CLEARANCE
+    _apply(obj, grow)
+    _slim(obj, 20_000)
+
+    V, F = _triangles(obj)
+    bpy.data.objects.remove(obj, do_unlink=True)
+    voxel = unit * VOXEL_SIZE
+    steps = max(1, int(math.ceil(travel / voxel)))
+    shifts = [np.asarray(back) * (travel * k / steps) for k in range(steps + 1)]
+    cutter = _object_from(src.name + " path", np.vstack([V + d for d in shifts]),
+                          np.vstack([F + k * len(V) for k in range(len(shifts))]))
+    remesh = cutter.modifiers.new("Fuse", type='REMESH')
+    remesh.mode = 'VOXEL'
+    remesh.voxel_size = voxel
+    _apply(cutter, remesh)
+    if spare is not None:
+        point, normal, radius, slab = spare
+        _subtract(cutter, _object_from("Spare", *miisplit.cylinder_mesh(point, normal, radius, slab)))
+    return cutter
+
+
+def _make_pieces(unit, rig, with_base=True, assembled=False):
+    """The figure as pieces that snap together with pins, as core/ makes it
+    (pipeline.cpp, splitFigure): the head, each arm from the armhole, the
+    torso with a short neck and the legs from just below the shirt or skirt
+    (with the base, if any), laid out for printing with their pins. Each pin
+    is as thick as the cut and both pieces allow and goes in as deep as holds
+    it firmly; the torso and legs keep clear of the way the head and arms
+    slide in. assembled puts every piece where it goes instead."""
+    import numpy as np
+    from mathutils import Vector
+    from mathutils.bvhtree import BVHTree
+    import miisplit as ms
+
+    voxel = unit * VOXEL_SIZE
+    clearance = ms.SLIDE_CLEARANCE
+    body = rig["body"]
+    joints = {k: np.asarray(v, dtype=np.float64) for k, v in rig["joints"].items()}
+    V, F, T = _triangles(body, "pmo_tag")
+    head_parts = [o for o in bpy.context.scene.objects if o.type == 'MESH' and o is not body]
+    head_obj = bpy.data.objects.get("Head")
+    head_v = _coords(head_obj.data).astype(np.float64)
+    bpy.data.objects.remove(body, do_unlink=True)
+    print("Body tags: " + ", ".join(f"{n} {int((T == t).sum())}" for n, t in (
+        ("cap", ms.TAG_CAP), ("torso", ms.TAG_TORSO), ("left arm", ms.TAG_ARM_L),
+        ("right arm", ms.TAG_ARM_R), ("legs", ms.TAG_LEGS), ("neck", ms.TAG_NECK))))
+
+    class Joint:
+        def __init__(self, name, point, normal, gap, outlines):
+            self.name, self.point, self.normal, self.gap, self.outlines = name, point, ms.unit(normal), gap, outlines
+            self.spots, self.on, self.off = [], [], []  # per pin: its spot, its socket in the torso and in the other piece
+
+    ARM_L, ARM_R, NECK, HIPS = range(4)
+    J = [None] * 4
+
+    # Arms: square to the upper arm, just where it comes free of the body.
+    def raycaster(v, f):
+        tree = BVHTree.FromPolygons(v.tolist(), f.tolist())
+
+        def raycast(origin, direction, distance):
+            hit = tree.ray_cast(Vector(origin), Vector(direction), distance)
+            return None if hit[0] is None else hit[3]
+        return raycast
+
+    arms = [None, None]
+    for side in (0, 1):
+        point, axis, forbidden = ms.find_arm_cut(V, F, T, side, joints, unit, raycaster)
+        cut = ms.cut_off(V, F, T, point, axis, [ms.TAG_ARM_R if side else ms.TAG_ARM_L], forbidden)
+        if cut is None:
+            raise RuntimeError("split: could not cut off an arm")
+        (V, F, T), arms[side], outlines = cut
+        J[ARM_R if side else ARM_L] = Joint("right shoulder" if side else "left shoulder", point, axis, 0.0, outlines)
+
+    # Neck: the torso keeps it up into the head, which has a hole for it, as
+    # a minifigure's head sits on its neck.
+    top = np.unique(F[T == ms.TAG_NECK])
+    if not len(top):
+        raise RuntimeError("split: the body has no neck")
+    cx, cy = V[top, :2].mean(0)
+    neck_top = V[top, 2].max()
+    radius = np.hypot(V[top, 0] - cx, V[top, 1] - cy).max()
+    near = np.hypot(head_v[:, 0] - cx, head_v[:, 1] - cy) < 1.3 * radius
+    head_bottom = head_v[near, 2].min() if near.any() else neck_top
+    z = head_bottom + min(0.5 * max(neck_top - head_bottom, 0.0), 0.06 * unit)
+    point = np.array((cx, cy, z))
+    cut = ms.cut_off(V, F, T, point, (0.0, 0.0, 1.0), [ms.TAG_NECK],
+                     lambda t, c: ~np.isin(t, (ms.TAG_NECK, ms.TAG_TORSO, ms.TAG_CAP)))
+    if cut is None:
+        raise RuntimeError("split: could not cut the neck")
+    (V, F, T), _inside, outlines = cut  # the top of the neck, hidden in the head: not needed
+    J[NECK] = Joint("neck", point, (0.0, 0.0, 1.0), clearance, outlines)
+    print(f"Neck: into the head (from {head_bottom:.2f}) up to {z:.2f}")
+
+    # Hips: just below the shirt or skirt, where the legs come out.
+    hem = V[np.unique(F[T == ms.TAG_TORSO]), 2].min()
+    point = np.array((0.0, 0.0, hem - 0.01 * unit))
+    cut = ms.cut_off(V, F, T, point, (0.0, 0.0, -1.0), [ms.TAG_LEGS])
+    if cut is None:
+        raise RuntimeError("split: could not cut off the legs")
+    (V, F, T), legs, outlines = cut
+    J[HIPS] = Joint("hips", point, (0.0, 0.0, -1.0), 0.0, outlines)
+    torso_v, torso_f = V, F
+    _tick("split body")
+
+    # Each piece fused on its own, before any socket is cut, so each pin can
+    # be sized and aimed with both pieces it joins in view.
+    HEAD, LEFT_ARM, RIGHT_ARM, TORSO, LEGS = range(5)
+    names = ["Head", "Left arm", "Right arm", "Torso", "Legs"]
+    objs = [_join(head_parts, "Head piece"),
+            _object_from("Left arm", arms[0][0], arms[0][1]),
+            _object_from("Right arm", arms[1][0], arms[1][1]),
+            _object_from("Torso", torso_v, torso_f),
+            _object_from("Legs", legs[0], legs[1])]
+    for o in objs[1:]:
+        _close(o)
+    if with_base:
+        objs[LEGS] = _join([objs[LEGS], _add_base([objs[LEGS]], unit)], "Legs")
+    total = 0
+    for i, o in enumerate(objs):
+        objs[i], dropped = _fuse_solid(o, unit)
+        total += _tri_count(objs[i].data)
+        print(f"{names[i]}: {_tri_count(objs[i].data):,} triangles, dropped {dropped} specks")
+    _tick("fuse pieces")
+    for o in objs:
+        if total > MAX_TRIS:
+            _slim(o, int(MAX_TRIS * _tri_count(o.data) / total))
+    _tick("slim")
+    # Pins: as thick as the cross-section and both pieces allow, going in as
+    # deep as holds them firmly.
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    solids = [BVHTree.FromObject(o, depsgraph) for o in objs]
+
+    def room(bvh, mouth, axis, r, max_depth):
+        """How deep a bore of radius r can go from mouth along axis, up to
+        max_depth, with its wall and the cone past its end inside the solid."""
+        axis = Vector(axis)
+        mouth = Vector(mouth)
+        e1, e2 = (Vector(e) for e in ms.plane_basis(np.asarray(axis)))
+        wall = ms.wall_for(r)
+        reach = max_depth + r + wall + voxel
+
+        def leaves_at(o):
+            start = o + axis * voxel
+            loc, normal, _i, _d = bvh.find_nearest(start)
+            if loc is None or (start - loc).dot(normal) >= 0:
+                return voxel  # already outside
+            hit = bvh.ray_cast(start, axis, reach)
+            return math.inf if hit[0] is None else voxel + hit[3]
+
+        ring = min(leaves_at(mouth + (e1 * math.cos(q * math.pi / 6) + e2 * math.sin(q * math.pi / 6)) * (r + wall))
+                   for q in range(12))
+        return min(max_depth, ring - wall, leaves_at(mouth) - r - wall)
+
+    class Socket:
+        def __init__(self, mouth, axis, radius, depth):
+            self.mouth, self.axis, self.radius, self.depth = mouth, axis, radius, depth
+
+    moving = [LEFT_ARM, RIGHT_ARM, HEAD, LEGS]
+    for ji, j in enumerate(J):
+        on, off = solids[TORSO], solids[moving[ji]]
+        for outline in j.outlines:
+            # Legs coming out as one (a pelvis) take two pins, so they cannot turn.
+            for centre, diameter in ms.pin_spots(outline, j.normal, 2.0, 5.0, ji == HIPS and len(j.outlines) == 1):
+                # Hips carry the figure: no thinner than 2 mm. A thin neck or
+                # arm may go down to 1.6 mm to keep a wall around its socket.
+                thinnest = 2.0 if ji == HIPS else 1.6
+                best = (-1.0, 0.0, 0.0, 0.0)
+                r = diameter / 2 + ms.PIN_CLEARANCE
+                while r >= thinnest / 2 + ms.PIN_CLEARANCE - 1e-9:
+                    want = ms.good_depth(r)
+                    d_on = room(on, centre, -j.normal, r, want)
+                    d_off = room(off, centre + j.normal * j.gap, j.normal, r, want)
+                    score = min(d_on, d_off) / want
+                    if score > best[0] + 1e-6:
+                        best = (score, r, d_on, d_off)
+                    if best[0] >= 1:
+                        break  # the thickest that goes deep enough
+                    r -= 0.1
+                _score, r, d_on, d_off = best
+                j.spots.append([centre, 2 * (r - ms.PIN_CLEARANCE)])
+                j.on.append(Socket(centre, -j.normal, r, max(d_on, 1.5)))
+                j.off.append(Socket(centre + j.normal * j.gap, j.normal, r, max(d_off, 1.5)))
+
+    # Pins that do the same job come out the same, so any of them fits: both
+    # shoulders, and both hips.
+    def match_pins(which):
+        r = min(k.radius for ji in which for k in J[ji].on)
+        for ji in which:
+            j = J[ji]
+            for s in range(len(j.spots)):
+                if j.on[s].radius == r:
+                    continue
+                want = ms.good_depth(r)
+                j.on[s].radius = j.off[s].radius = r
+                j.on[s].depth = max(room(solids[TORSO], j.on[s].mouth, j.on[s].axis, r, want), 1.5)
+                j.off[s].depth = max(room(solids[moving[ji]], j.off[s].mouth, j.off[s].axis, r, want), 1.5)
+                j.spots[s][1] = 2 * (r - ms.PIN_CLEARANCE)
+
+    match_pins([ARM_L, ARM_R])
+    match_pins([HIPS])
+    del solids
+    _tick("size pins")
+
+    def socket_cutter(sockets):
+        meshes = [ms.socket_mesh(k.mouth, k.axis, k.radius, k.depth) for k in sockets]
+        at, Vs, Fs = 0, [], []
+        for v, f in meshes:
+            Vs.append(v)
+            Fs.append(f + at)
+            at += len(v)
+        return _object_from("Sockets", np.vstack(Vs), np.vstack(Fs))
+
+    # The head, with a hole for the neck the shape the neck is where the head
+    # starts, and a little roomier.
+    j = J[NECK]
+    rings = ms.slice_loops(torso_v, torso_f, j.point - np.array((0.0, 0.0, 0.06 * unit)), np.array((0.0, 0.0, 1.0)))
+    if rings:
+        ring = min(rings, key=lambda o: np.hypot(o[:, 0] - j.point[0], o[:, 1] - j.point[1]).mean())
+        pv, pf = ms.prism_mesh(ms.offset_polygon(ring[:, :2], clearance),
+                               j.point[2] - 0.12 * unit - clearance, j.point[2] + clearance)
+        _subtract(objs[HEAD], _object_from("Neck hole", pv, pf))
+
+    # The torso and legs give way to the head and arms on their way in.
+    def cutter_for(ji, spare_joint, clip=None):
+        j = J[ji]
+        widest = max(np.linalg.norm(o - j.point, axis=1).max() for o in j.outlines)
+        spare = None
+        if spare_joint:
+            spare = (j.point, j.normal, widest + clearance + 2 * voxel, clearance + 2 * voxel)
+        return _sweep_cutter(objs[moving[ji]], j.off[0].axis, max(k.depth for k in j.off) + 1.0, unit,
+                             clip=clip, spare=spare)
+
+    neck_top_z = J[NECK].point[2] + clearance + 2 * voxel
+    torso_cuts = [cutter_for(NECK, False, clip=((0.0, 0.0, neck_top_z), (0.0, 0.0, 1.0))),
+                  cutter_for(ARM_L, True), cutter_for(ARM_R, True)]
+    leg_cuts = [cutter_for(ARM_L, False), cutter_for(ARM_R, False)]
+    _tick("clearance")
+    for c in torso_cuts:
+        if c is not None:
+            _subtract(objs[TORSO], c)
+    for c in leg_cuts:
+        if c is not None:
+            _subtract(objs[LEGS], c)
+    _subtract(objs[HEAD], socket_cutter(J[NECK].off))
+    _subtract(objs[LEFT_ARM], socket_cutter(J[ARM_L].off))
+    _subtract(objs[RIGHT_ARM], socket_cutter(J[ARM_R].off))
+    _subtract(objs[TORSO], socket_cutter([k for j in J for k in j.on]))
+    _subtract(objs[LEGS], socket_cutter(J[HIPS].off))
+    for o in objs:
+        _tidy(o)
+    _tick("sockets")
+    print("Pieces: " + ", ".join(f"{names[i]} {len(o.data.polygons):,} faces"
+                                 + (f" ({_open_edges(o.data)} non-manifold edges)" if _open_edges(o.data) else "")
+                                 for i, o in enumerate(objs)))
+
+    # Every piece prints standing as it stands in the figure; the pins lie on
+    # their flats.
+    pieces = [_triangles(o) for o in objs]
+    pins = []
+    for j in J:
+        for s, (centre, diameter) in enumerate(j.spots):
+            length = j.on[s].depth + j.off[s].depth + j.gap - 2 * ms.PIN_END_GAP
+            pins.append((j, s, ms.make_pin(diameter, length)))
+            print(f"Pin for the {j.name}: {diameter:.2f} mm thick, {length:.2f} long "
+                  f"(sockets {j.on[s].depth:.2f} and {j.off[s].depth:.2f} deep)")
+    if assembled:
+        # For checking: every piece where it goes, the pins in their sockets.
+        out = list(pieces)
+        for j, s, (pv, pf) in pins:
+            a = j.off[s].axis
+            start = j.on[s].mouth - a * (j.on[s].depth - ms.PIN_END_GAP)
+            q = pv - np.array((0.0, 0.0, 0.84 * j.spots[s][1] / 2))
+            x = np.array((1.0, 0.0, 0.0))
+            k, c = np.cross(x, a), float(x @ a)
+            sn = np.linalg.norm(k)
+            if sn > 1e-9:
+                u = k / sn  # Rodrigues
+                q = q * c + np.cross(u, q) * sn + np.outer(q @ u, u) * (1 - c)
+            elif c < 0:
+                q = q * np.array((-1.0, 1.0, -1.0))
+            out.append((q + start, pf))
+    else:
+        out = ms.lay_out(pieces + [p for _j, _s, p in pins])
+
+    for o in objs:
+        bpy.data.objects.remove(o, do_unlink=True)
+    at, Vs, Fs = 0, [], []
+    for v, f in out:
+        Vs.append(v)
+        Fs.append(f + at)
+        at += len(v)
+    solid = _object_from("PrintMiiOut", np.vstack(Vs), np.vstack(Fs))
+    print(f"Printable: {len(objs)} pieces and {len(pins)} pins, {len(solid.data.polygons):,} faces, "
+          f"{_open_edges(solid.data)} non-manifold edges")
 
 
 def _tilt_head(rotation):
@@ -789,17 +1229,20 @@ def _attach_body(body_type, head, height, build):
     """Pose and scale the body as the Mii's height and build make it (FFL.js's
     per-bone scaling, see miibody.py), stand it under the head the way FFL.js
     attaches the head, and close it, overlapping the head so the fuse step
-    joins them. Returns False if there is no body."""
+    joins them. Each face keeps which piece of a split figure it goes to (the
+    "pmo_tag" face attribute, see miisplit.face_tags). Returns the body
+    object and the joints a split needs, or None if there is no body."""
     import bmesh
     import numpy as np
 
     sys.path.insert(0, SCRIPT_DIR)
     import miibody
+    import miisplit
 
     body_glb = os.path.join(SCRIPT_DIR, f"miiBody{'M' if body_type == 'm' else 'F'}_wiiu_plain.glb")
     if not os.path.exists(body_glb):
         print(f"Error: Body model not found: {body_glb}")
-        return False
+        return None
 
     hv = _coords(head.data)
     head_width = float(hv[:, 0].max() - hv[:, 0].min())
@@ -820,6 +1263,14 @@ def _attach_body(body_type, head, height, build):
         at += len(v)
     mesh = bpy.data.meshes.new("Body")
     mesh.from_pydata(np.concatenate(verts).tolist(), [], np.concatenate(faces).tolist())
+    tag = mesh.attributes.new("pmo_tag", 'INT', 'FACE')
+    tag.data.foreach_set("value", np.concatenate(miisplit.face_tags(body)).astype(np.int32))
+
+    # Where the shoulders, elbows and wrists are, in the same frame.
+    joints = {}
+    for name in ("arm_l1", "arm_l2", "wrist_l", "arm_r1", "arm_r2", "wrist_r"):
+        p = body.bone_world[body.joint_names.index(name)][:3, 3]
+        joints[name] = to_z_up @ ((p - body.head[:3, 3]) * miibody.HEAD_TO_BODY)
     body_obj = bpy.data.objects.new("Body", mesh)
     bpy.context.scene.collection.objects.link(body_obj)
 
@@ -867,7 +1318,7 @@ def _attach_body(body_type, head, height, build):
     thicken.mid_level = 0.0
     thicken.strength = head_width * BODY_THICKEN
     _apply(body, thicken)
-    return True
+    return {"body": body, "joints": joints}
 
 
 if __name__ == "__main__":
@@ -877,7 +1328,9 @@ if __name__ == "__main__":
         args = sys.argv[1:]
 
     with_base = "--no-base" not in args
-    args = [a for a in args if a != "--no-base"]
+    split = "--split" in args
+    assembled = "--assembled" in args
+    args = [a for a in args if a not in ("--no-base", "--split", "--assembled")]
 
     # --height N / --build N: the Mii's own height and build (0-127).
     traits = {"height": 64, "build": 64}
@@ -924,4 +1377,5 @@ if __name__ == "__main__":
 
     for input_glb in targets:
         output_stl = os.path.splitext(input_glb)[0] + ".stl"
-        process_glb(input_glb, output_stl, body_type=body_type, with_base=with_base, **traits)
+        process_glb(input_glb, output_stl, body_type=body_type, with_base=with_base,
+                    split=split, assembled=assembled, **traits)

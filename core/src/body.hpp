@@ -35,6 +35,13 @@ public:
 	double headTiltDegrees() const;
 	V3 scale() const { return scale_; }
 
+	/** Per part, per face: which piece of a split figure it belongs to
+	 *  (a Tag from split.hpp), from the part and the bones its corners follow. */
+	std::vector<std::vector<int>> faceTags() const;
+
+	/** A joint's position in the frame inHeadFrame() uses. Throws if there is none. */
+	V3 jointInHeadFrame(const std::string& name) const;
+
 private:
 	struct Node {
 		std::string name;
@@ -46,6 +53,7 @@ private:
 	std::vector<Mat4> scaled_;  // per node: the scaled world matrix (joints only)
 	std::vector<char> isJoint_;
 	std::vector<Mesh> parts_;               // skinned, world space, Y up
+	std::vector<std::string> partNames_;
 	std::vector<std::vector<int>> dominant_;  // per part, per vertex: node it follows most
 	Mat4 head_;
 	V3 scale_;

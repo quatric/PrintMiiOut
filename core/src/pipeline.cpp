@@ -19,6 +19,7 @@
 #include "head.hpp"
 #include "image.hpp"
 #include "mesh_ops.hpp"
+#include "split.hpp"
 
 namespace pmo {
 
@@ -168,6 +169,422 @@ Mesh makeBase(const std::vector<Mesh>& pieces, double unit) {
 	return base;
 }
 
+/** Sand the voxel steps off a fused piece and drop loose specks, leaving
+ *  its sockets as they are. Returns which vertices are on a socket. */
+std::vector<char> finishPiece(Mesh& solid, const std::vector<Socket>& sockets, double voxel) {
+	auto onSocket = [&](const Mesh& m) {
+		std::vector<char> on(m.v.size(), 0);
+		for (size_t i = 0; i < m.v.size(); i++)
+			for (const Socket& s : sockets)
+				if (std::fabs(s.distance(m.v[i])) < 0.75 * voxel) on[i] = 1;
+		return on;
+	};
+	std::vector<char> free = onSocket(solid);
+	for (char& c : free) c = !c;
+	smooth(solid, 0.5, 2, &free);
+	dropSpecks(solid, kMinIsland);
+	return onSocket(solid);
+}
+
+/** The figure as pieces that snap together with pins: the head, each arm
+ *  from the armhole, the torso with a short neck, and the legs from just
+ *  below the shirt or skirt (with the base, if any), laid out for printing
+ *  with their pins. The head and arms are made first; the torso and legs
+ *  then keep clear of the way they slide in. */
+Mesh splitFigure(std::vector<Mesh>& headParts, Mesh& body, const Body& skeleton, double unit, const Options& o,
+                 const std::function<void(const std::string&)>& log, const std::function<void(const char*)>& tick) {
+	char buf[256];
+	const double voxel = unit / o.voxelsPerHead;
+	const PinFit fit;
+	const double clearance = 0.15;  // between pieces that slide past each other
+	auto joint = [&](const char* name) { return toZUp(skeleton.jointInHeadFrame(name)); };
+	auto tagged = [](int want) { return [want](int t) { return t == want; }; };
+	auto none = [](int, const V3&) { return false; };
+	auto verticesTagged = [&](const Mesh& m, int want) {
+		std::vector<char> on(m.v.size(), 0);
+		for (size_t f = 0; f < m.f.size(); f++)
+			if (faceTag(m, int(f)) == want)
+				for (int k : m.f[f]) on[k] = 1;
+		return on;
+	};
+
+	struct Joint {
+		const char* name;
+		V3 point, normal;  // normal points into the piece that slides on
+		double gap = 0;    // between the two pieces' faces at the joint
+		std::vector<Outline> outlines;
+		std::vector<PinSpot> spots;
+		std::vector<Socket> on, off;  // per spot: the socket in the fixed piece and in the one that slides on
+	};
+	enum { kArmL, kArmR, kNeck, kHips };
+	std::vector<Joint> joints(4);
+
+	// Arms: square to the upper arm, just where it comes free of the body:
+	// the first cut, going out from the shoulder, that takes nothing far
+	// from the arm's bones.
+	Mesh arms[2];
+	for (int side = 0; side < 2; side++) {
+		const int tag = side ? kTagArmR : kTagArmL;
+		Joint& j = joints[side ? kArmR : kArmL];
+		j.name = side ? "right shoulder" : "left shoulder";
+		const V3 shoulder = joint(side ? "arm_r1" : "arm_l1"), elbow = joint(side ? "arm_r2" : "arm_l2"),
+		         wrist = joint(side ? "wrist_r" : "wrist_l");
+		const V3 axis = normalized(elbow - shoulder);
+		auto fromBones = [&](const V3& p) {
+			double best = 1e300;
+			for (auto [a, b] : {std::pair<V3, V3>{shoulder, elbow}, {elbow, wrist}}) {
+				V3 ab = b - a;
+				double t = std::clamp(dot(p - a, ab) / std::max(dot(ab, ab), 1e-12), 0.0, 1.0);
+				best = std::min(best, length(p - (a + ab * t)));
+			}
+			return best;
+		};
+		// The arm's own faces are within its thickness of its bones (the hand
+		// a little past the wrist); a cut that leaks takes body far beyond.
+		std::vector<char> armFaces = verticesTagged(body, tag);
+		double thick = 0;
+		for (size_t i = 0; i < body.v.size(); i++)
+			if (armFaces[i]) thick = std::max(thick, fromBones(body.v[i]));
+		const double reach = std::max(0.12 * unit, 1.5 * thick);
+		auto leak = [&](int t, const V3& c) {
+			if (t == kTagLegs || t == kTagNeck || t == (side ? kTagArmL : kTagArmR)) return true;
+			return fromBones(c) > reach;
+		};
+		j.normal = axis;
+		// Where the arm comes free: the first cut going down the arm.
+		double free = -1;
+		for (double at = 0.02 * unit; at < 0.25 * unit && free < 0; at += 0.005 * unit) {
+			Mesh rest = body, arm;
+			std::vector<Outline> outlines;
+			if (cutOff(rest, shoulder + axis * at, axis, tagged(tag), leak, arm, outlines)) free = at;
+		}
+		if (free < 0) throw std::runtime_error("split: could not cut off an arm");
+		// The pin runs up the arm into the shoulder. A little further down
+		// the arm the shoulder may hold a thicker one; take the cut that
+		// takes the thickest pin as deep as it should go.
+		const V3 e1 = normalized(cross(axis, std::fabs(axis.x) < 0.9 ? V3(1, 0, 0) : V3(0, 1, 0))), e2 = cross(axis, e1);
+		auto roomAlong = [&](const BVH& bvh, const V3& mouth, const V3& dir, double r) {
+			auto depth = [&](const V3& o) {
+				double t = 0;
+				return bvh.raycast(o + dir * 0.01, dir, 50.0, t) ? t : 50.0;
+			};
+			const double wall = Socket::wallFor(r);
+			double room = depth(mouth) - r - wall;
+			for (int q = 0; q < 8; q++)
+				room = std::min(room, depth(mouth + (e1 * std::cos(q * M_PI / 4) + e2 * std::sin(q * M_PI / 4)) * (r + wall)) - wall);
+			return room;
+		};
+		double bestScore = -1e300;
+		Mesh rest;
+		for (int k = 0; k <= 12; k++) {
+			double at = free + 0.5 * k;
+			Mesh candidate = body, arm;
+			std::vector<Outline> outlines;
+			if (!cutOff(candidate, shoulder + axis * at, axis, tagged(tag), leak, arm, outlines) || outlines.empty()) continue;
+			PinSpot spot = pinSpots(outlines[0], axis, 1.6, 5.0, false)[0];
+			BVH inTorso(candidate), inArm(arm);
+			// The thickest pin both sides take deep enough; failing that, how
+			// close the thinnest comes.
+			double score = -1;
+			for (double r = spot.diameter / 2 + fit.clearance; r >= 0.8 + fit.clearance - 1e-9; r -= 0.1) {
+				double room = std::min(roomAlong(inTorso, spot.centre, -axis, r), roomAlong(inArm, spot.centre, axis, r));
+				double want = Socket::goodDepth(r);
+				if (room >= want) {
+					score = r;
+					break;
+				}
+				score = std::max(score, room / want - 1);
+			}
+			if (score > bestScore + 0.05) {
+				bestScore = score;
+				rest = std::move(candidate);
+				arms[side] = std::move(arm);
+				j.outlines = std::move(outlines);
+				j.point = shoulder + axis * at;
+			}
+		}
+		if (rest.f.empty()) throw std::runtime_error("split: could not cut off an arm");
+		const double at = dot(j.point - shoulder, axis);
+		body = std::move(rest);
+		std::snprintf(buf, sizeof buf, "%s: cut %.2f down the arm", j.name, at);
+		log(buf);
+	}
+
+	// Neck: the torso keeps it up into the head, which has a hole for it,
+	// as a minifigure's head sits on its neck.
+	{
+		Joint& j = joints[kNeck];
+		j.name = "neck";
+		std::vector<char> top = verticesTagged(body, kTagNeck);
+		double cx = 0, cy = 0, n = 0, neckTop = -1e300;
+		for (size_t i = 0; i < body.v.size(); i++)
+			if (top[i]) {
+				cx += body.v[i].x;
+				cy += body.v[i].y;
+				n++;
+				neckTop = std::max(neckTop, body.v[i].z);
+			}
+		if (!n) throw std::runtime_error("split: the body has no neck");
+		cx /= n;
+		cy /= n;
+		double radius = 0;
+		for (size_t i = 0; i < body.v.size(); i++)
+			if (top[i]) radius = std::max(radius, std::hypot(body.v[i].x - cx, body.v[i].y - cy));
+		double headBottom = 1e300;
+		for (const V3& p : headParts[0].v)
+			if (std::hypot(p.x - cx, p.y - cy) < 1.3 * radius) headBottom = std::min(headBottom, p.z);
+		double z = headBottom + std::min(0.5 * std::max(neckTop - headBottom, 0.0), 0.06 * unit);
+		j.point = V3(cx, cy, z);
+		j.normal = V3(0, 0, 1);
+		j.gap = clearance;
+		Mesh inside;  // the top of the neck, hidden in the head: not needed
+		if (!cutOff(body, j.point, j.normal, tagged(kTagNeck),
+		            [](int t, const V3&) { return t != kTagNeck && t != kTagTorso && t != kTagCap; }, inside, j.outlines))
+			throw std::runtime_error("split: could not cut the neck");
+		std::snprintf(buf, sizeof buf, "Neck: into the head (from %.2f) up to %.2f", headBottom, z);
+		log(buf);
+	}
+
+	// Hips: just below the shirt or skirt, where the legs come out.
+	Mesh legs;
+	{
+		Joint& j = joints[kHips];
+		j.name = "hips";
+		std::vector<char> torso = verticesTagged(body, kTagTorso);
+		double hem = 1e300;
+		for (size_t i = 0; i < body.v.size(); i++)
+			if (torso[i]) hem = std::min(hem, body.v[i].z);
+		j.point = V3(0, 0, hem - 0.01 * unit);
+		j.normal = V3(0, 0, -1);
+		if (!cutOff(body, j.point, j.normal, tagged(kTagLegs), none, legs, j.outlines))
+			throw std::runtime_error("split: could not cut off the legs");
+	}
+	tick("split body");
+
+	// Each piece on its grid, before any socket is cut, so each pin can be
+	// sized and aimed with both pieces it joins in view.
+	Mesh base;
+	if (o.base) base = makeBase({legs}, unit);
+	std::vector<const Mesh*> headInputs;
+	for (const Mesh& m : headParts) headInputs.push_back(&m);
+	std::vector<const Mesh*> legInputs{&legs};
+	if (o.base) legInputs.push_back(&base);
+	enum { kHead, kLeftArm, kRightArm, kTorso, kLegs };
+	const char* names[5] = {"Head", "Left arm", "Right arm", "Torso", "Legs"};
+	std::vector<Voxels> grids;
+	grids.push_back(voxelize(headInputs, voxel, log));
+	grids.push_back(voxelize({&arms[0]}, voxel, log));
+	grids.push_back(voxelize({&arms[1]}, voxel, log));
+	grids.push_back(voxelize({&body}, voxel, log));
+	grids.push_back(voxelize(legInputs, voxel, log));
+	tick("voxelize");
+
+	// Pins: as thick as the cross-section and both pieces allow, going in
+	// as deep as holds them firmly.
+	const int moving[4] = {kLeftArm, kRightArm, kHead, kLegs};
+	for (int ji = 0; ji < 4; ji++) {
+		Joint& j = joints[ji];
+		const Voxels &on = grids[kTorso], &off = grids[moving[ji]];
+		std::vector<V3> axes{j.normal};
+		for (const Outline& ol : j.outlines)
+			// Legs coming out as one (a pelvis) take two pins, so they cannot turn.
+			for (const PinSpot& sp : pinSpots(ol, j.normal, 2.0, 5.0, ji == kHips && j.outlines.size() == 1)) {
+				double bestScore = -1, bestR = 0, bestOn = 0, bestOff = 0;
+				V3 bestAxis = j.normal;
+				// Hips carry the figure: no thinner than 2 mm. A thin neck or
+				// arm may go down to 1.6 mm to keep a wall around its socket.
+				const double thinnest = ji == kHips ? 2.0 : 1.6;
+				for (double r = sp.diameter / 2 + fit.clearance; r >= thinnest / 2 + fit.clearance - 1e-9; r -= 0.1) {
+					double want = Socket::goodDepth(r);
+					for (const V3& a : axes) {
+						double dOn = on.room(sp.centre, -a, r, want, j.normal);
+						double dOff = off.room(sp.centre + j.normal * j.gap, a, r, want, -j.normal);
+						double score = std::min(dOn, dOff) / want;
+						if (score > bestScore + 1e-6) {
+							bestScore = score;
+							bestR = r;
+							bestAxis = a;
+							bestOn = dOn;
+							bestOff = dOff;
+						}
+					}
+					if (bestScore >= 1) break;  // the thickest that goes deep enough
+				}
+				j.spots.push_back({sp.centre, 2 * (bestR - fit.clearance)});
+				for (int side = 0; side < 2; side++) {
+					Socket k;
+					k.mouth = sp.centre + j.normal * (side ? j.gap : 0.0);
+					k.axis = side ? bestAxis : -bestAxis;
+					k.radius = bestR;
+					k.depth = std::max(side ? bestOff : bestOn, 1.5);
+					(side ? j.off : j.on).push_back(k);
+				}
+			}
+	}
+
+	// Pins that do the same job come out the same, so any of them fits:
+	// both shoulders, and both hips.
+	auto matchPins = [&](std::initializer_list<int> which) {
+		double r = 1e300;
+		for (int ji : which)
+			for (const Socket& k : joints[ji].on) r = std::min(r, k.radius);
+		for (int ji : which) {
+			Joint& j = joints[ji];
+			for (size_t s = 0; s < j.spots.size(); s++) {
+				if (j.on[s].radius == r) continue;
+				double want = Socket::goodDepth(r);
+				j.on[s].radius = j.off[s].radius = r;
+				j.on[s].depth = std::max(grids[kTorso].room(j.on[s].mouth, j.on[s].axis, r, want, j.normal), 1.5);
+				j.off[s].depth = std::max(grids[moving[ji]].room(j.off[s].mouth, j.off[s].axis, r, want, -j.normal), 1.5);
+				j.spots[s].diameter = 2 * (r - fit.clearance);
+			}
+		}
+	};
+	matchPins({kArmL, kArmR});
+	matchPins({kHips});
+
+	struct Piece {
+		Mesh mesh;
+		std::vector<Socket> sockets;
+	};
+	std::vector<Piece> pieces(5);
+	auto contourPiece = [&](int index, std::vector<Socket> sockets, const std::vector<Carve>& carves, Field* field) {
+		FuseExtras extras;
+		extras.sockets = &sockets;
+		extras.carves = carves;
+		extras.field = field;
+		pieces[index].mesh = contour(grids[index], log, extras);
+		pieces[index].sockets = sockets;
+		grids[index] = Voxels();
+		std::snprintf(buf, sizeof buf, "%s: %zu triangles", names[index], pieces[index].mesh.f.size());
+		log(buf);
+	};
+
+	// The head, with a hole for the neck the shape the neck is where the
+	// head starts, and a little roomier.
+	Field headField, armField[2];
+	{
+		Joint& j = joints[kNeck];
+		std::vector<Outline> rings = slice(body, V3(j.point.x, j.point.y, j.point.z - 0.06 * unit), V3(0, 0, 1));
+		Field neckField;
+		double best = 1e300;
+		for (const Outline& ol : rings) {
+			double r = 0;  // the ring around the neck: the one nearest its middle
+			for (const V3& q : ol) r += std::hypot(q.x - j.point.x, q.y - j.point.y);
+			r /= double(ol.size());
+			if (r < best) {
+				best = r;
+				neckField = prismField(ol, j.point.z - 0.12 * unit, j.point.z, voxel);
+			}
+		}
+		std::vector<Carve> carves;
+		if (!neckField.empty()) {
+			Carve c;
+			c.other = &neckField;
+			c.dir = V3(0, 0, -1);
+			c.travel = 0;
+			c.clearance = clearance;
+			carves.push_back(c);
+		}
+		contourPiece(kHead, j.off, carves, &headField);
+		tick("fuse head");
+	}
+	contourPiece(kLeftArm, joints[kArmL].off, {}, &armField[0]);
+	contourPiece(kRightArm, joints[kArmR].off, {}, &armField[1]);
+	tick("fuse arms");
+	// The torso and legs give way to the head and arms on their way in.
+	auto carveFor = [&](const Joint& j, const Field& field, bool spareJoint) {
+		Carve c;
+		c.other = &field;
+		c.dir = j.off.empty() ? -j.normal : -j.off[0].axis;
+		double deepest = 0, widest = 0;
+		for (const Socket& k : j.off) deepest = std::max(deepest, k.depth);
+		for (const Outline& ol : j.outlines)
+			for (const V3& q : ol) widest = std::max(widest, length(q - j.point));
+		c.travel = deepest + 1.0;
+		c.clearance = clearance;
+		if (spareJoint) {
+			c.jointPoint = j.point;
+			c.jointNormal = j.normal;
+			c.jointRadius = widest + clearance + 2 * voxel;
+			c.jointSlab = clearance + 2 * voxel;
+		}
+		return c;
+	};
+	{
+		std::vector<Socket> sockets;
+		for (int k : {kNeck, kArmL, kArmR, kHips}) sockets.insert(sockets.end(), joints[k].on.begin(), joints[k].on.end());
+		contourPiece(kTorso, sockets,
+		             {carveFor(joints[kNeck], headField, false), carveFor(joints[kArmL], armField[0], true),
+		              carveFor(joints[kArmR], armField[1], true)},
+		             nullptr);
+		tick("fuse torso");
+	}
+	headField = Field();
+	contourPiece(kLegs, joints[kHips].off,
+	             {carveFor(joints[kArmL], armField[0], false), carveFor(joints[kArmR], armField[1], false)}, nullptr);
+	armField[0] = armField[1] = Field();
+	tick("fuse legs");
+
+	// Sand, then share the triangle budget out by size.
+	std::vector<std::vector<char>> locked;
+	size_t total = 0;
+	for (Piece& p : pieces) {
+		locked.push_back(finishPiece(p.mesh, p.sockets, voxel));
+		total += p.mesh.f.size();
+	}
+	tick("sand");
+	for (size_t i = 0; i < pieces.size(); i++) {
+		size_t budget = total > o.maxTriangles ? size_t(double(o.maxTriangles) * pieces[i].mesh.f.size() / total)
+		                                       : pieces[i].mesh.f.size();
+		simplify(pieces[i].mesh, budget, voxel * 0.25, &locked[i]);
+	}
+	tick("tidy");
+
+	// Every piece prints standing as it stands in the figure; the pins lie
+	// on their flats.
+	std::vector<Mesh> out;
+	for (Piece& p : pieces) out.push_back(std::move(p.mesh));
+	for (const Joint& j : joints)
+		for (size_t s = 0; s < j.spots.size(); s++) {
+			double diameter = j.spots[s].diameter;
+			double length = j.on[s].depth + j.off[s].depth + j.gap - 2 * fit.endGap;
+			out.push_back(makePin(diameter, length, fit));
+			std::snprintf(buf, sizeof buf, "Pin for the %s: %.2f mm thick, %.2f long (sockets %.2f and %.2f deep)", j.name,
+			              diameter, length, j.on[s].depth, j.off[s].depth);
+			log(buf);
+		}
+	if (o.assembled) {
+		// For checking: every piece where it goes, the pins in their sockets.
+		Mesh all;
+		for (size_t i = 0; i < 5; i++) all.append(out[i]);
+		size_t pin = 5;
+		for (const Joint& j : joints)
+			for (size_t s = 0; s < j.spots.size(); s++, pin++) {
+				Mesh& m = out[pin];
+				V3 a = j.off[s].axis, start = j.on[s].mouth - a * (j.on[s].depth - fit.endGap);
+				V3 x(1, 0, 0), k = cross(x, a);
+				double c = dot(x, a), sn = length(k);
+				double flat = 0.84 * j.spots[s].diameter / 2;
+				for (V3& p : m.v) {
+					V3 q(p.x, p.y, p.z - flat);
+					if (sn > 1e-9) {
+						V3 u = k / sn;  // Rodrigues
+						q = q * c + cross(u, q) * sn + u * (dot(u, q) * (1 - c));
+					}
+					p = start + q;
+				}
+				all.append(m);
+			}
+		return all;
+	}
+	Mesh all = layOut(out, 6.0, 180.0);
+	std::snprintf(buf, sizeof buf, "Printable: %zu pieces and pins, %zu faces, %d non-manifold edges", out.size(),
+	              all.f.size(), countNonManifoldEdges(all));
+	log(buf);
+	return all;
+}
+
 std::vector<uint8_t> exportSTL(const Mesh& m) {
 	aiScene scene;
 	scene.mRootNode = new aiNode();
@@ -285,6 +702,7 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 	pieces[0] = std::move(head);
 
 	bool hasBody = false;
+	Mesh b;
 	if (o.body == 'm' || o.body == 'f') {
 		if (!bodyBytes.size) throw std::runtime_error("body: no body model given");
 		Body body(bodyBytes.data, bodyBytes.size, o.height, o.build);
@@ -305,10 +723,12 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 		for (Mesh& m : pieces)
 			for (V3& p : m.v) p = rotate(p);
 
-		Mesh b;
-		for (Mesh& part : body.inHeadFrame()) {
-			for (V3& p : part.v) p = toZUp(p);
-			b.append(part);
+		std::vector<Mesh> bodyParts = body.inHeadFrame();
+		std::vector<std::vector<int>> tags = body.faceTags();
+		for (size_t i = 0; i < bodyParts.size(); i++) {
+			for (V3& p : bodyParts[i].v) p = toZUp(p);
+			setFaceTags(bodyParts[i], tags[i]);  // which piece each face goes to, if split
+			b.append(bodyParts[i]);
 		}
 		// The torso and legs share a ring of vertices at the waist (or the
 		// skirt hem) and the neck is open inside the head. Weld only open
@@ -321,9 +741,16 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 		fillHoles(b);
 		// Thin ankles, wrists and the skirt hem snap once the figure is scaled down.
 		displace(b, [&](int) { return unit * kBodyThicken; });
-		pieces.push_back(std::move(b));
 		hasBody = true;
 		tick("body");
+		if (o.split) {
+			Mesh all = splitFigure(pieces, b, body, unit, o, log, tick);
+			std::vector<uint8_t> stl = exportSTL(all);
+			tick("export");
+			return stl;
+		}
+		b.uv.clear();
+		pieces.push_back(std::move(b));
 	}
 
 	if (hasBody && o.base) pieces.push_back(makeBase(pieces, unit));

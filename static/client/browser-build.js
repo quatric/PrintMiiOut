@@ -15,6 +15,17 @@ const NEXT_STAGE = {
 	'specks': 'Slimming the mesh down…',
 	'tidy': 'Writing the STL…',
 };
+// Printing in pieces, the body is cut up and each piece made on its own.
+const NEXT_SPLIT_STAGE = {
+	...NEXT_STAGE,
+	'body': 'Cutting the figure into pieces…',
+	'split body': 'Fitting the pins…',
+	'voxelize': 'Making the head…',
+	'fuse head': 'Making the arms…',
+	'fuse arms': 'Making the torso…',
+	'fuse torso': 'Making the legs…',
+	'fuse legs': 'Smoothing…',
+};
 
 async function fetchBytes(url, what) {
 	let res;
@@ -55,13 +66,14 @@ export async function buildInBrowser(form, onStatus) {
 	]);
 
 	onStatus('Building your Mii in this browser…');
+	const stages = job.split && job.body ? NEXT_SPLIT_STAGE : NEXT_STAGE;
 	const worker = new Worker(new URL('worker.js', import.meta.url), { type: 'module' });
 	try {
 		const stl = await new Promise((resolve, reject) => {
 			worker.onmessage = ({ data }) => {
 				if (data.type === 'log') {
 					const stage = /^\[\s*[\d.]+s\] (.+?): /.exec(data.line);
-					if (stage && NEXT_STAGE[stage[1]]) onStatus(NEXT_STAGE[stage[1]]);
+					if (stage && stages[stage[1]]) onStatus(stages[stage[1]]);
 				} else if (data.type === 'done') {
 					resolve(data.stl);
 				} else if (data.type === 'error') {
@@ -79,7 +91,13 @@ export async function buildInBrowser(form, onStatus) {
 				head: head.buffer,
 				mask: mask.buffer,
 				body: body ? body.buffer : null,
-				options: { body: job.body || '', height: job.height, build: job.build, base: true },
+				options: {
+					body: job.body || '',
+					height: job.height,
+					build: job.build,
+					base: job.base !== false,
+					split: !!job.split,
+				},
 			}, transfer);
 		});
 		return new Blob([stl], { type: 'model/stl' });

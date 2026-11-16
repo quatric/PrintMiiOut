@@ -14,6 +14,8 @@ struct Options {
 	char body = 0;              // 'm', 'f', or 0 for the head alone
 	int height = 64, build = 64;  // the Mii's own, 0 to 127
 	bool base = true;           // a disc under the feet
+	bool split = false;         // the head, arms, torso and legs as pieces that snap together with pins
+	bool assembled = false;     // split, but every piece left where it goes and the pins in place, for checking
 	double voxelsPerHead = 240;   // fuse resolution, across the head's width
 	size_t maxTriangles = 600000;
 	std::function<void(const std::string&)> log;

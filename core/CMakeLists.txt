@@ -60,6 +60,7 @@ add_library(pmo_core STATIC
 	src/head.cpp
 	src/fuse.cpp
 	src/simplify.cpp
+	src/split.cpp
 	src/pipeline.cpp)
 target_include_directories(pmo_core PUBLIC src third_party)
 target_link_libraries(pmo_core PUBLIC assimp::assimp)

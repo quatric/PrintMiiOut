@@ -258,6 +258,7 @@
 
     .options { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     .options .field-wide { grid-column: 1 / -1; margin-top: 0; }
+    .options .pieces-note { margin-top: -12px; }
     .gender-row { display: flex; gap: 12px; flex-wrap: wrap; padding: 3px; }
 
     .error-box {
@@ -558,6 +559,21 @@
             </div>
             <div class="field-note">Very short, slim Miis keep their size, with arms and legs kept thick enough to print.</div>
           </div>
+          <div class="field" id="pieces-field">
+            <span class="label" id="pieces-label">Print as</span>
+            <div class="gender-row" role="group" aria-labelledby="pieces-label">
+              <button class="gender-btn selected" data-pieces="whole" type="button" aria-pressed="true">One figure</button>
+              <button class="gender-btn"          data-pieces="split" type="button" aria-pressed="false">Snap-together parts</button>
+            </div>
+          </div>
+          <div class="field" id="base-field">
+            <span class="label" id="base-label">Base</span>
+            <div class="gender-row" role="group" aria-labelledby="base-label">
+              <button class="gender-btn selected" data-base="on"  type="button" aria-pressed="true">With base</button>
+              <button class="gender-btn"          data-base="off" type="button" aria-pressed="false">No base</button>
+            </div>
+          </div>
+          <div class="field-note field-wide pieces-note" id="pieces-note" hidden>The head, torso, arms and legs print on their own, each standing up, with pins that press in firmly like building bricks. Print at 100% scale so the pins fit.</div>
           <div class="field field-wide" id="where-field" hidden>
             <span class="label" id="where-label">Build on</span>
             <div class="gender-row" role="group" aria-labelledby="where-label">
@@ -624,7 +640,7 @@
     <section class="px">
       <h2>About</h2>
       <p>PrintMiiOut fetches your Mii, builds a head and body in Blender, and hands you an STL for your slicer.</p>
-      <p>You can bring a Mii from a Nintendo Network ID (Wii U), a Pretendo Network ID, a binary Mii file (.mii or .ffsd), or a Mii QR code image. Glasses print as a flat frame with temple arms.</p>
+      <p>You can bring a Mii from a Nintendo Network ID (Wii U), a Pretendo Network ID, a binary Mii file (.mii or .ffsd), or a Mii QR code image. Glasses print as a flat frame with temple arms, and the figure can print as snap-together parts.</p>
       <p>Printer, filament and patience not included.</p>
     </section>
     <section class="px">
@@ -684,6 +700,8 @@
   // ── Body and proportions toggles ──────────────────────────────────────────
   let bodyGender = 'auto';
   let bodyProportions = 'mii';
+  let printPieces = 'whole';
+  let standBase = 'on';
   let buildWhere = 'server';
   // Building in the browser needs WebAssembly and module workers.
   document.getElementById('where-field').hidden = !(typeof WebAssembly === 'object' && 'Worker' in window);
@@ -691,6 +709,11 @@
     btn.addEventListener('click', () => {
       if (btn.dataset.gender) bodyGender = btn.dataset.gender;
       if (btn.dataset.proportions) bodyProportions = btn.dataset.proportions;
+      if (btn.dataset.base) standBase = btn.dataset.base;
+      if (btn.dataset.pieces) {
+        printPieces = btn.dataset.pieces;
+        document.getElementById('pieces-note').hidden = printPieces !== 'split';
+      }
       if (btn.dataset.where) {
         buildWhere = btn.dataset.where;
         document.getElementById('yeah-note').textContent = buildWhere === 'browser'
@@ -813,6 +836,8 @@
     fd.append('input_type', activeTab);
     fd.append('body_type',  bodyGender);
     fd.append('proportions', bodyProportions);
+    fd.append('pieces', printPieces);
+    fd.append('base', standBase);
     fd.append('expression', document.getElementById('expression').value);
 
     if (activeTab === 'nnid') {

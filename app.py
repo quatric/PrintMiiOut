@@ -268,7 +268,8 @@ def _fetch_mii_png(params: dict) -> bytes:
 
 def _run_blender_job(job_id: str, glb_path: str, png_path: str,
                      body_type: str, output_stl: str,
-                     height: int = 64, build: int = 64):
+                     height: int = 64, build: int = 64,
+                     split: bool = False, base: bool = True):
     """Run the Blender pipeline in a thread and update the job file."""
     job = _get_job(job_id) or {}
 
@@ -290,6 +291,10 @@ def _run_blender_job(job_id: str, glb_path: str, png_path: str,
         cmd = [blender, "-b", "--factory-startup", "--python", script, "--", glb_path]
         if body_type in ("m", "f"):
             cmd += [body_type, "--height", str(int(height)), "--build", str(int(build))]
+            if split:
+                cmd.append("--split")
+            if not base:
+                cmd.append("--no-base")
 
         try:
             result = subprocess.run(
@@ -358,7 +363,8 @@ def _body_for(form_params: dict, body_type: str, proportions: str) -> tuple[str,
     return body_type, traits["height"], traits["build"]
 
 
-def _start_job(form_params: dict, body_type: str, proportions: str = "mii") -> str:
+def _start_job(form_params: dict, body_type: str, proportions: str = "mii",
+               split: bool = False, base: bool = True) -> str:
     """Fetch assets, start Blender thread, return job_id."""
     # The model, the mask and the Mii lookup are independent upstream
     # requests, so they run side by side instead of one after another.
@@ -391,7 +397,8 @@ def _start_job(form_params: dict, body_type: str, proportions: str = "mii") -> s
 
     t = threading.Thread(
         target=_run_blender_job,
-        args=(job_id, glb_path, png_path, body_type, out_stl, traits["height"], traits["build"]),
+        args=(job_id, glb_path, png_path, body_type, out_stl, traits["height"], traits["build"],
+              split, base),
         daemon=True,
     )
     t.start()
@@ -461,6 +468,7 @@ LLMS_TXT = f"""# PrintMiiOut (printmiiout.com)
 
 - [The tool]({SITE_URL}/): enter a Nintendo Network ID (NNID) or Pretendo Network ID (PNID), upload a binary .mii / .ffsd file, or upload a Mii QR code image. Conversion usually takes under a minute.
 - Glasses print as a flat frame that rests on the face, with temple arms holding it to the head.
+- The figure prints as one piece by default, or as snap-together parts: the head, torso, arms and legs (with or without the base) print separately and press together on pins with crush ribs, like building bricks.
 - The model can also be built in the visitor's own browser (beta): the same pipeline compiled to WebAssembly, with assimp reading the Mii and writing the STL.
 - The body follows the Mii's own height and build, scaled bone by bone as Nintendo's editor scales it, with arms and legs held thick enough to print. An "Average" option uses the middle height and build instead.
 
@@ -489,9 +497,10 @@ def llms_txt():
     return _text(LLMS_TXT, "text/plain")
 
 
-def _parse_form() -> tuple[tuple[dict, str, str] | None, str | None]:
-    """The Mii API params, body type and proportions a /submit or /resolve
-    form asks for, or an error message for the user."""
+def _parse_form() -> tuple[tuple[dict, str, str, bool, bool] | None, str | None]:
+    """The Mii API params, body type, proportions, whether to print the
+    figure in snap-together pieces and whether to stand it on a base, as a
+    /submit or /resolve form asks for them, or an error message for the user."""
     input_type = request.form.get("input_type", "nnid")
     body_type   = request.form.get("body_type", "auto")
     if body_type not in ("auto", "m", "f", "none"):
@@ -499,6 +508,8 @@ def _parse_form() -> tuple[tuple[dict, str, str] | None, str | None]:
     proportions = request.form.get("proportions", "mii")
     if proportions not in ("mii", "average"):
         proportions = "mii"
+    split = request.form.get("pieces", "whole") == "split"
+    base = request.form.get("base", "on") != "off"
 
     # Build the API params based on input type
     api_params: dict = {}
@@ -572,7 +583,7 @@ def _parse_form() -> tuple[tuple[dict, str, str] | None, str | None]:
         expression = "normal"
     api_params["expression"] = expression
 
-    return (api_params, body_type, proportions), None
+    return (api_params, body_type, proportions, split, base), None
 
 
 @app.route("/submit", methods=["POST"])
@@ -587,10 +598,10 @@ def submit():
     form, error = _parse_form()
     if error:
         return jsonify(error=error), 400
-    api_params, body_type, proportions = form
+    api_params, body_type, proportions, split, base = form
 
     try:
-        job_id = _start_job(api_params, body_type, proportions)
+        job_id = _start_job(api_params, body_type, proportions, split, base)
     except requests.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else 500
         app.logger.warning("Mii API error %s for %s input", status, request.form.get("input_type", "nnid"))
@@ -614,7 +625,7 @@ def resolve():
     form, error = _parse_form()
     if error:
         return jsonify(error=error), 400
-    api_params, body_type, proportions = form
+    api_params, body_type, proportions, split, base = form
     body_type, height, build = _body_for(api_params, body_type, proportions)
     return jsonify(
         glb=_mii_glb_url(api_params),
@@ -622,6 +633,8 @@ def resolve():
         body=None if body_type == "none" else body_type,
         height=height,
         build=build,
+        split=split,
+        base=base,
     )
 
 

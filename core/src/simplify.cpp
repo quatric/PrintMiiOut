@@ -54,7 +54,7 @@ struct Candidate {
 
 class Simplifier {
 public:
-	explicit Simplifier(Mesh& m) : m_(m), alive_(m.f.size(), 1), faces_(m.v.size()), q_(m.v.size()),
+	explicit Simplifier(Mesh& m, const std::vector<char>* locked) : m_(m), locked_(locked), alive_(m.f.size(), 1), faces_(m.v.size()), q_(m.v.size()),
 	                               stamp_(m.v.size(), 0), target_(m.v.size(), -1), pos_(m.v.size()),
 	                               tries_(m.v.size(), 0), bestCost_(m.v.size(), 1e300) {
 		for (int f = 0; f < (int)m.f.size(); f++) {
@@ -82,6 +82,7 @@ public:
 				V3 d = m_.v[a] - m_.v[b];
 				if (dot(d, d) >= s2) continue;
 				V3 mid = (m_.v[a] + m_.v[b]) * 0.5;
+				if (isLocked(a) || isLocked(b)) continue;
 				if (valid(a, b, mid)) merge(a, b, mid);
 			}
 		}
@@ -117,6 +118,7 @@ public:
 
 private:
 	Mesh& m_;
+	const std::vector<char>* locked_;
 	std::vector<char> alive_;
 	std::vector<std::vector<int>> faces_;
 	std::vector<Quadric> q_;
@@ -140,15 +142,19 @@ private:
 		out.erase(std::unique(out.begin(), out.end()), out.end());
 	}
 
+	bool isLocked(int u) const { return locked_ && size_t(u) < locked_->size() && (*locked_)[u]; }
+
 	/** Cheapest collapse of u into a neighbour (other than skip). */
 	void push(int u, int skip = -1) {
+		target_[u] = -1;
+		if (isLocked(u)) return;
 		std::vector<int>& nb = scratchC_;
 		neighbours(u, nb);
 		double best = 1e300;
 		int bestV = -1;
 		V3 bestP;
 		for (int v : nb) {
-			if (v == skip) continue;
+			if (v == skip || isLocked(v)) continue;
 			V3 p;  // kept near the edge it came from
 			double cost = edgeCost(u, v, p);
 			if (cost < best) {
@@ -248,6 +254,7 @@ private:
 				push(w);
 				continue;
 			}
+			if (isLocked(w) || isLocked(v)) continue;
 			V3 q;
 			double c = edgeCost(w, v, q);
 			if (c < bestCost_[w]) {
@@ -264,9 +271,9 @@ private:
 
 }  // namespace
 
-void simplify(Mesh& m, size_t maxTriangles, double maxError) {
+void simplify(Mesh& m, size_t maxTriangles, double maxError, const std::vector<char>* locked) {
 	if (m.f.size() <= maxTriangles) return;
-	Simplifier s(m);
+	Simplifier s(m, locked);
 	s.run(maxTriangles, maxError * maxError, maxError * 1.6);
 }
 
