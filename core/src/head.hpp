@@ -1,5 +1,4 @@
-// The head: smoothed shells, raised face features, glasses. Mirrors the
-// head half of printmiiout.py.
+// The head: smoothed shells, raised face features, glasses.
 #pragma once
 
 #include <vector>

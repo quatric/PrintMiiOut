@@ -1,5 +1,5 @@
-// PrintMiiOut's model pipeline without Blender: a Mii head GLB (and its
-// face mask) in, a printable STL out. Runs natively and as WebAssembly.
+// PrintMiiOut's model pipeline: a Mii head GLB (and its face mask) in, a
+// printable STL out. Runs natively and, for the site, as WebAssembly.
 #pragma once
 
 #include <cstddef>

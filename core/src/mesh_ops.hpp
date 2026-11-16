@@ -1,5 +1,5 @@
-// Mesh operations the pipeline needs, standing in for the Blender modifiers
-// and bmesh operators printmiiout.py uses.
+// Mesh operations the pipeline needs, each working like the Blender modifier
+// or bmesh operator of the same job.
 #pragma once
 
 #include <functional>

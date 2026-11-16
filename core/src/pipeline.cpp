@@ -25,7 +25,7 @@ namespace pmo {
 
 namespace {
 
-// Sizes are fractions of head width, as in printmiiout.py.
+// Sizes are fractions of head width, so they hold at any import scale.
 const double kVoxelSize = 1.0 / 240;  // glasses grid, whatever the fuse resolution
 const double kBaseRadius = 0.45;
 const double kBaseHeight = 0.05;
@@ -46,7 +46,7 @@ struct Part {
 
 bool has(const std::string& s, const char* what) { return s.find(what) != std::string::npos; }
 
-/** glTF is Y up, Blender (and these meshes) Z up: (x, y, z) -> (x, -z, y). */
+/** glTF is Y up, these meshes (and the STL) Z up: (x, y, z) -> (x, -z, y). */
 V3 toZUp(const V3& p) { return {p.x, -p.z, p.y}; }
 
 Mat4 fromAi(const aiMatrix4x4& a) {
@@ -118,7 +118,7 @@ std::vector<Part> loadHead(Bytes glb) {
 				std::array<V2, 3> c;
 				for (int k = 0; k < 3; k++) {
 					const aiVector3D& t = am->mTextureCoords[0][face.mIndices[k]];
-					c[k] = {t.x, t.y};  // assimp flips V up, as Blender does
+					c[k] = {t.x, t.y};  // assimp flips V, so it runs up
 				}
 				m.uv.push_back(c);
 			}

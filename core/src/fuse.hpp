@@ -1,6 +1,5 @@
-// Fuses overlapping shells into one watertight solid, standing in for
-// Blender's voxel remesh (OpenVDB): voxelize, find the outside by flood
-// fill, and contour the boundary with marching tetrahedra, which never
+// Fuses overlapping shells into one watertight solid, the way a voxel remesh
+// does: voxelize, find the outside by flood fill, and contour the boundary with marching tetrahedra, which never
 // leaves a crack or a non-manifold edge.
 #pragma once
 

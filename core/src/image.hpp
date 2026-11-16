@@ -1,4 +1,4 @@
-// Decoded textures, looked up the way printmiiout.py reads Blender images.
+// Decoded textures, looked up bottom row first with wrapping UVs.
 #pragma once
 
 #include <cstddef>
@@ -21,11 +21,11 @@ public:
 	int height() const { return h_; }
 	int channels() const { return channels_; }
 
-	/** Texel at column x and row y counted from the bottom, as Blender
-	 *  stores pixels; out of range wraps. */
+	/** Texel at column x and row y counted from the bottom; out of range
+	 *  wraps. */
 	RGBA texel(long long x, long long yFromBottom) const;
-	/** Nearest texel under a UV (V up), wrapping like numpy's % in
-	 *  printmiiout.py: int(u * width) % width. */
+	/** Nearest texel under a UV (V up), wrapping like Python's %:
+	 *  int(u * width) % width, never negative. */
 	RGBA nearest(double u, double v) const;
 	/** Bilinear sample under a UV (V up), for displacement. */
 	RGBA bilinear(double u, double v) const;

@@ -7,7 +7,7 @@
  *        [--height 0-127] [--build 0-127] [--body m|f] [--pose Finish]
  *        [--stl ours.stl] [--out out/name]
  *
- *   node reference.mjs --a blender.stl --b core.stl [--face | --box x0,y0,z0,x1,y1,z1]
+ *   node reference.mjs --a before.stl --b after.stl [--face | --box x0,y0,z0,x1,y1,z1]
  *        [--out out/name]
  *        compares two STLs instead, with no FFL.js figure; --face frames
  *        the face only, --box any region (same units as the STLs).
@@ -147,7 +147,7 @@ function toHeadFrame(tris, origin, scale) {
 	return tris;
 }
 
-/** Binary STL, converting three's Y up to Blender's Z up: (x, y, z) -> (x, -z, y). */
+/** Binary STL, converting three's Y up to PrintMiiOut's Z up: (x, y, z) -> (x, -z, y). */
 function encodeSTL(tris) {
 	const n = tris.length / 9;
 	const buf = Buffer.alloc(84 + n * 50);
@@ -166,7 +166,7 @@ function encodeSTL(tris) {
 	return buf;
 }
 
-/** Triangles from an STL (Blender Z up) back into three's Y up: (x, y, z) -> (x, z, -y). */
+/** Triangles from an STL (PrintMiiOut's Z up) back into three's Y up: (x, y, z) -> (x, z, -y). */
 function decodeSTL(bytes) {
 	const geo = new STLLoader().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
 	const p = geo.attributes.position.array;

@@ -1,5 +1,5 @@
-// Command line front end for the core, to build models and check them
-// against the Blender pipeline without a browser.
+// Command line front end for the core, to build and check models without a
+// browser.
 //
 //   printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb miiBodyM.glb]
 //                    [--height N] [--build N] [--no-base] [--split] [--assembled] [--voxels 240] [--max-tris 600000]

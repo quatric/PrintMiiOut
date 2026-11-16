@@ -13,10 +13,10 @@ namespace {
 // Mask texture noise leaves islands under ~0.35 GLB units^2; real features are 1+.
 const double kSpeckArea = 0.5;
 // The mask is cut per triangle on a grid this fine, as six levels of
-// subdivision cut it in printmiiout.py.
+// subdivision would cut it.
 const int kEmbossSegments = 64;
 
-// Glasses sizes are fractions of head width, as in printmiiout.py.
+// Glasses sizes are fractions of head width.
 const double kGlassAlpha = 0.5;
 const double kGlassCell = 0.5;
 const double kGlassRest = 5;
@@ -28,7 +28,7 @@ const double kGlassArm = 0.04;
 const double kGlassArmReach = 0.15;
 const double kGlassSink = 0.01;
 
-// How the face texture is embossed, as in printmiiout.py. Ink (the
+// How the face texture is embossed. Ink (the
 // brightest channel this dark or darker: black and grey lines, dark
 // outlines) stands at full height. Colour (hearts, coins, tongues, a
 // coloured iris or eyebrow) stands at half height, under the ink.

@@ -1,6 +1,8 @@
 """
-Poses and scales a Mii body GLB the way Nintendo's editor body does, without
-Blender, so the result matches FFL.js bone for bone.
+Poses and scales a Mii body GLB the way Nintendo's editor body does, so the
+result matches FFL.js bone for bone. core/src/body.cpp is the C++ port the
+site uses; this is the reference it follows, and tools/bake_body.py uses it
+to bake the bodies the site loads.
 
 The body GLBs carry the Wii U editor skeleton (skl_root, chest, head, arms,
 legs) and its animation clips. Nintendo scales that skeleton per bone from
@@ -17,8 +19,8 @@ FFL.js (helpers/ModelScaleDesc.js and helpers/SkeletonScalingExtensions.js)
 reproduces this on three.js skeletons. This module follows FFL.js exactly,
 so tools/reference can check it against FFL.js's own render.
 
-Everything here is numpy and the standard library: it runs inside Blender's
-Python, in a plain interpreter, and it maps one to one onto the C++ port.
+Everything here is numpy and the standard library, and it maps one to one
+onto the C++ port.
 """
 import json
 import struct
@@ -252,7 +254,7 @@ class Body:
     @staticmethod
     def _apply_pose(glb, trs, pose):
         """The first frame of the clip, as three.js's AnimationMixer.update(0)
-        and Blender's glTF import (frame 1) both leave it."""
+        and the C++ port both leave it."""
         clips = glb.json.get("animations", [])
         clip = next((a for a in clips if a.get("name") == pose), None)
         if clip is None:
