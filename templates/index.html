@@ -276,6 +276,11 @@
     input[type="range"]::-moz-range-thumb { width: 16px; height: 24px; border: none; border-radius: 0; background: var(--leaf); box-shadow: 0 0 0 3px var(--ink); }
     .fit-ends { display: flex; justify-content: space-between; font-size: 0.84rem; color: var(--soft); margin-top: 6px; }
     .gender-row { display: flex; gap: 12px; flex-wrap: wrap; padding: 3px; }
+    .swatch {
+      display: inline-block; width: 18px; height: 14px; margin-right: 8px; vertical-align: -1px;
+      background: linear-gradient(90deg, var(--s1) 0 34%, var(--s2, var(--s1)) 34% 67%, var(--s3, var(--s2, var(--s1))) 67%);
+      box-shadow: 0 0 0 2px currentColor;
+    }
 
     .error-box {
       padding: 12px 16px;
@@ -490,6 +495,9 @@
               <button class="gender-btn"          data-make="coin"         type="button" aria-pressed="false">Coin</button>
               <button class="gender-btn"          data-make="stamp"        type="button" aria-pressed="false">Round stamp</button>
               <button class="gender-btn"          data-make="square-stamp" type="button" aria-pressed="false">Square stamp</button>
+              <button class="gender-btn"          data-make="stickers"     type="button" aria-pressed="false">Stickers</button>
+              <button class="gender-btn"          data-make="towel"        type="button" aria-pressed="false">Towel</button>
+              <button class="gender-btn"          data-make="tote"         type="button" aria-pressed="false">Tote bag</button>
             </div>
             <div class="field-note" id="make-note" hidden></div>
           </div>
@@ -629,12 +637,72 @@
               <button class="gender-btn"          data-border="dashed" type="button" aria-pressed="false">Dashed</button>
             </div>
           </div>
+          <div class="field" data-makes="stickers towel tote" hidden>
+            <span class="label" id="paper-label">Paper</span>
+            <div class="gender-row" role="group" aria-labelledby="paper-label">
+              <button class="gender-btn selected" data-paper="letter" type="button" aria-pressed="true">US Letter</button>
+              <button class="gender-btn"          data-paper="a4"     type="button" aria-pressed="false">A4</button>
+            </div>
+          </div>
+          <div class="field" data-makes="stickers" hidden>
+            <span class="label" id="facestyle-label">Face</span>
+            <div class="gender-row" role="group" aria-labelledby="facestyle-label">
+              <button class="gender-btn selected" data-facestyle="photo" type="button" aria-pressed="true">In colour</button>
+              <button class="gender-btn"          data-facestyle="drawn" type="button" aria-pressed="false">Drawn</button>
+            </div>
+          </div>
+          <div class="field field-wide" data-makes="stickers" hidden>
+            <label for="sheet">Print on</label>
+            <select id="sheet" aria-describedby="sheet-note">
+              <option value="">Sticker paper: the whole sheet, cut out by hand</option>
+            </select>
+            <div class="field-note" id="sheet-note"></div>
+          </div>
+          <div class="field field-wide" data-makes="stickers" hidden>
+            <span class="label" id="theme-label">Colours</span>
+            <div class="gender-row" role="group" aria-labelledby="theme-label">
+              <button class="gender-btn selected" data-theme="classic" type="button" aria-pressed="true"><span class="swatch" style="--s1:#f3e383;--s2:#93bfea;--s3:#98b85c"></span>Classic</button>
+              <button class="gender-btn"          data-theme="pastel"  type="button" aria-pressed="false"><span class="swatch" style="--s1:#fbe9a2;--s2:#f8c2d1;--s3:#bddcf5"></span>Pastel</button>
+              <button class="gender-btn"          data-theme="rainbow" type="button" aria-pressed="false"><span class="swatch" style="--s1:#fde07a;--s2:#f6a6bb;--s3:#8ec6f1"></span>Rainbow</button>
+              <button class="gender-btn"          data-theme="pink"    type="button" aria-pressed="false"><span class="swatch" style="--s1:#f7b5c8;--s2:#fcd6e0;--s3:#f19ab4"></span>Pink</button>
+              <button class="gender-btn"          data-theme="sky"     type="button" aria-pressed="false"><span class="swatch" style="--s1:#c3e5f6;--s2:#8ec6ec;--s3:#a3dbd2"></span>Sky</button>
+              <button class="gender-btn"          data-theme="mono"    type="button" aria-pressed="false"><span class="swatch" style="--s1:#ffffff;--s2:#c6c6c6;--s3:#7a7a7a"></span>Black &amp; white</button>
+            </div>
+          </div>
+          <div class="field field-wide" id="ink-field" data-makes="stickers towel tote" hidden>
+            <span class="label" id="ink-label">Ink</span>
+            <div class="gender-row" role="group" aria-labelledby="ink-label">
+              <button class="gender-btn selected" data-ink="blue"   type="button" aria-pressed="true"><span class="swatch" style="--s1:#1f47c4"></span>Blue</button>
+              <button class="gender-btn"          data-ink="black"  type="button" aria-pressed="false"><span class="swatch" style="--s1:#1b1b1b"></span>Black</button>
+              <button class="gender-btn"          data-ink="green"  type="button" aria-pressed="false"><span class="swatch" style="--s1:#1e9a3f"></span>Green</button>
+              <button class="gender-btn"          data-ink="red"    type="button" aria-pressed="false"><span class="swatch" style="--s1:#e3312c"></span>Red</button>
+              <button class="gender-btn"          data-ink="purple" type="button" aria-pressed="false"><span class="swatch" style="--s1:#7a3eae"></span>Purple</button>
+              <button class="gender-btn"          data-ink="pink"   type="button" aria-pressed="false"><span class="swatch" style="--s1:#ec5e98"></span>Pink</button>
+            </div>
+            <div class="field-note">The face drawn as a Mii stamp draws it, in the colours of Shachihata's stamp inks.</div>
+          </div>
+          <div class="field" id="outlines-field" data-makes="stickers" hidden>
+            <span class="label" id="outlines-label">Label edges</span>
+            <div class="gender-row" role="group" aria-labelledby="outlines-label">
+              <button class="gender-btn selected" data-outlines="off" type="button" aria-pressed="true">Leave off</button>
+              <button class="gender-btn"          data-outlines="on"  type="button" aria-pressed="false">Draw them</button>
+            </div>
+            <div class="field-note">Draw them to test on plain paper first: hold the page against a label sheet to the light.</div>
+          </div>
+          <div class="field" data-makes="towel tote" hidden>
+            <span class="label" id="mirror-label">Printing on</span>
+            <div class="gender-row" role="group" aria-labelledby="mirror-label">
+              <button class="gender-btn selected" data-mirror="off" type="button" aria-pressed="true">Paper or a print shop</button>
+              <button class="gender-btn"          data-mirror="on"  type="button" aria-pressed="false">Iron-on transfer</button>
+            </div>
+            <div class="field-note">Iron-on transfers print mirrored, so the design reads the right way once ironed on.</div>
+          </div>
           <div class="field" data-makes="coin stamp square-stamp" hidden>
             <label for="size">Size in mm</label>
             <input type="number" id="size" inputmode="decimal" min="20" max="80" step="1" placeholder="40" aria-describedby="size-note">
             <div class="field-note" id="size-note">Across, 20 to 80&nbsp;mm.</div>
           </div>
-          <div class="field field-wide" data-makes="coin stamp square-stamp" hidden>
+          <div class="field field-wide" data-makes="coin stamp square-stamp stickers towel tote" hidden>
             <span class="label" id="lettering-label">Text</span>
             <div class="gender-row" role="group" aria-labelledby="lettering-label">
               <button class="gender-btn selected" data-lettering="name"   type="button" aria-pressed="true">Their name</button>
@@ -701,8 +769,8 @@
         <span class="avatar"><img class="avatar-look" src="{{ url_for('static', filename='mii-face.webp') }}" alt="" width="67" height="67"></span>
         <div><p class="who">PrintMiiOut</p><p class="when">just now</p></div>
       </div>
-      <p class="say">Your Mii is ready!</p>
-      <p>Your 3D Mii STL file has been generated successfully.</p>
+      <p class="say" id="result-say">Your Mii is ready!</p>
+      <p id="result-text">Your 3D Mii STL file has been generated successfully.</p>
       <div class="keepsake" id="keepsake" hidden>
         <img id="keepsake-img" alt="The doodle you drew while waiting">
         <p>Your doodle from while you waited. Right-click or long-press to save it.</p>
@@ -718,6 +786,7 @@
       <p>PrintMiiOut fetches your Mii, builds a head and body right in your browser, and hands you an STL ready to slice for your 3D printer. Print your Mii with supports turned on.</p>
       <p>You can bring a Mii from a Nintendo Network ID (Wii U), a Pretendo Network ID, a binary Mii file (.mii or .ffsd), or a Mii QR code image. Glasses print as a flat frame with temple arms, and the figure can print as snap-together parts.</p>
       <p>It also makes print-in-place bobbleheads, coins with the face drawn flat, and round or square stamps to use with an ink pad, lettered with their name or your own text.</p>
+      <p>And for your regular printer: sheets of name stickers like Wii no Ma's, on sticker paper or any of The Print Shop's Avery label sheets, plus towel and tote bag designs for iron-on transfers.</p>
       <p>Printer, filament and patience not included.</p>
     </section>
     <section class="px">
@@ -779,7 +848,10 @@
   const choice = {
     make: 'figure', gender: 'auto', proportions: 'mii', pieces: 'whole', base: 'on',
     shape: 'round', rim: 'on', relief: 'raised', border: 'none', lettering: 'name', textpos: 'above',
+    paper: 'letter', facestyle: 'photo', theme: 'classic', ink: 'blue', outlines: 'off', mirror: 'off',
   };
+  // Printed on paper as a PDF rather than on a 3D printer.
+  const PRINTS = ['stickers', 'towel', 'tote'];
   const MAKES = {
     'figure': { note: '' },
     'bobblehead': {
@@ -800,6 +872,15 @@
       note: 'A square stamp: a base, the face plate, a domed top that shows the design, two pins and a cap. Stamped, the face and text read the right way round.',
       size: [15, 40, 25], sizeNote: 'Width of the face, 15 to 40&nbsp;mm; it is a fifth taller than wide.',
       fit: 'Fit', fitNote: 'Plate, pins or cap too hard to press in? Go looser. Falling out? Go tighter. Each step gives them 0.05&nbsp;mm more or less room all round.',
+    },
+    'stickers': {
+      note: 'A sheet of name stickers like the ones Wii no Ma printed, as a PDF. Print it on sticker paper and cut along the dashed lines, or pick the label sheet you have and the stickers fit its labels.',
+    },
+    'towel': {
+      note: 'A towel or handkerchief design, after the ones printed with a Mii stamp: a field of dots, with the face and name small in the corner. A PDF for iron-on transfer paper or a print shop.',
+    },
+    'tote': {
+      note: 'A tote bag badge: the face in the middle of a ring lettered with the name. A PDF for iron-on transfer paper or a print shop.',
     },
   };
   const PIN_FIT_NOTE = 'Pins too hard to press in? Go looser. Slipping out? Go tighter. Each step gives every pin and the neck 0.05&nbsp;mm more or less room all round.';
@@ -829,7 +910,96 @@
       document.getElementById('size-note').innerHTML = m.sizeNote + ` Usually ${usual}.`;
     }
     textInput.hidden = choice.lettering !== 'custom';
-    document.getElementById('text-pos-row').hidden = choice.lettering === 'none';
+    const printed = PRINTS.includes(choice.make);
+    document.getElementById('text-pos-row').hidden = choice.lettering === 'none' || printed;
+    document.getElementById('ink-field').hidden = !(choice.make === 'towel' || choice.make === 'tote' ||
+      (choice.make === 'stickers' && choice.facestyle === 'drawn'));
+    document.getElementById('outlines-field').hidden = choice.make !== 'stickers' || !sheetSelect.value;
+    document.getElementById('yeah-note').innerHTML = printed
+      ? 'Your browser draws the PDF in a few seconds.'
+      : 'Your browser builds it in under half a minute, with up to 1&nbsp;GB of memory. You can doodle while it works.';
+    if (choice.make === 'stickers') listSheets();
+  }
+
+  // ── Label sheets, from The Print Shop 4's list (static/client/labels.json) ──
+  const sheetSelect = document.getElementById('sheet');
+  let labelSheets = null, listedPaper = null;
+  // A size in inches as Avery writes it: 2-5/8, 1-1/3.
+  function inches(mm) {
+    const v = mm / 25.4, whole = Math.floor(v + 1e-6);
+    let best = [0, 1], err = Infinity;
+    for (const d of [2, 3, 4, 8, 16, 32]) {
+      const n = Math.round((v - whole) * d), e = Math.abs(v - whole - n / d);
+      if (e < err - 1e-9) { err = e; best = [n, d]; }
+    }
+    let [n, d] = best, w = whole;
+    if (n === d) { w++; n = 0; }
+    return n ? (w ? `${w}-${n}/${d}` : `${n}/${d}`) + '″' : `${w}″`;
+  }
+  function sizeText(l, paper) {
+    const mm = (v) => `${+v.toFixed(1)}`;
+    const [a, b] = [Math.min(l.w, l.h), Math.max(l.w, l.h)];
+    if (l.shape === 'round') return paper === 'letter' ? `${inches(a)} round` : `${mm(a)} mm round`;
+    return paper === 'letter' ? `${inches(a)} × ${inches(b)}` : `${mm(a)} × ${mm(b)} mm`;
+  }
+  async function listSheets() {
+    if (listedPaper === choice.paper) return;
+    listedPaper = choice.paper;
+    if (!labelSheets) {
+      try {
+        const res = await fetch("{{ url_for('static', filename='client/labels.json') }}");
+        labelSheets = await res.json();
+      } catch (_) {
+        labelSheets = { letter: [], a4: [] };
+      }
+    }
+    const groups = [
+      ['Round', l => l.shape === 'round'],
+      ['Oval', l => l.shape === 'oval'],
+      ['Square', l => l.shape === 'rect' && Math.abs(l.w - l.h) < 1],
+      ['Name badges', l => l.kind === 'N'],
+      ['Address and shipping', l => l.kind === 'A' && l.shape !== 'sheet'],
+      ['Other labels', l => l.shape !== 'sheet'],
+      ['Whole sheets', () => true],
+    ];
+    sheetSelect.length = 1;
+    const seen = new Set();
+    labelSheets[choice.paper].forEach((l, i) => { l.index = i; });
+    for (const [name, test] of groups) {
+      const items = labelSheets[choice.paper].filter(l => !seen.has(l.index) && test(l));
+      if (!items.length) continue;
+      const group = document.createElement('optgroup');
+      group.label = name;
+      for (const l of items.sort((p, q) => p.w * p.h - q.w * q.h)) {
+        seen.add(l.index);
+        const n = l.cols * l.rows;
+        const parts = l.parts.length > 4 ? l.parts.slice(0, 4).join(', ') + '…' : l.parts.join(', ');
+        const opt = new Option(`Avery ${parts}: ${sizeText(l, choice.paper)}, ${n} per sheet`, String(l.index));
+        group.appendChild(opt);
+      }
+      sheetSelect.appendChild(group);
+    }
+    showSheetNote();
+  }
+  function selectedSheet() {
+    return sheetSelect.value && labelSheets ? labelSheets[choice.paper][Number(sheetSelect.value)] : null;
+  }
+  function showSheetNote() {
+    const l = selectedSheet();
+    document.getElementById('sheet-note').textContent = (l
+      ? 'Each label gets a sticker that suits its shape, in a mix of colours. '
+      : 'The full sheet, after the Wii no Ma one, with dashed lines to cut along. ')
+      + 'Print at 100% (Actual size), not Fit to page.';
+    document.getElementById('outlines-field').hidden = choice.make !== 'stickers' || !l;
+  }
+  sheetSelect.addEventListener('change', showSheetNote);
+  // Letter where it is the usual paper, A4 elsewhere.
+  if (!/^(en-(US|CA|PH)|es-(US|MX|CL|CO|VE|GT|PR|CR)|fr-CA)$/i.test(navigator.language || 'en-US')) {
+    choice.paper = 'a4';
+    document.querySelectorAll('[data-paper]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.paper === 'a4');
+      b.setAttribute('aria-pressed', b.dataset.paper === 'a4');
+    });
   }
 
   document.querySelectorAll('.gender-btn').forEach(btn => {
@@ -1002,6 +1172,24 @@
       fd.append('text', textInput.value);
       fd.append('text_pos', choice.textpos);
     }
+    const printed = PRINTS.includes(choice.make);
+    let print = {};
+    if (printed) {
+      if (choice.lettering === 'custom' && !textInput.value.trim()) {
+        return showError('Type the text to put on it, or pick another text option.');
+      }
+      fd.append('lettering', choice.lettering);
+      fd.append('text', textInput.value);
+      print = {
+        paper: choice.paper,
+        label: choice.make === 'stickers' ? selectedSheet() : null,
+        theme: choice.theme,
+        faceStyle: choice.facestyle,
+        ink: choice.ink,
+        outlines: choice.make === 'stickers' && !!selectedSheet() && choice.outlines === 'on',
+        mirror: choice.mirror === 'on',
+      };
+    }
     fd.append('expression', document.getElementById('expression').value);
 
     if (activeTab === 'nnid') {
@@ -1042,11 +1230,20 @@
 
     try {
       const { buildInBrowser } = await import("{{ url_for('static', filename='client/browser-build.js') }}");
-      const stl = await buildInBrowser(fd, text => { statusText.textContent = text; });
+      const built = await buildInBrowser(fd, text => { statusText.textContent = text; }, print);
       if (builtUrl) URL.revokeObjectURL(builtUrl);
-      builtUrl = URL.createObjectURL(stl);
+      builtUrl = URL.createObjectURL(built);
       downloadLink.href = builtUrl;
-      downloadLink.download = choice.make === 'figure' ? 'printmiiout.stl' : `printmiiout-${choice.make}.stl`;
+      downloadLink.download = printed ? `printmiiout-${choice.make}.pdf`
+        : choice.make === 'figure' ? 'printmiiout.stl' : `printmiiout-${choice.make}.stl`;
+      downloadLink.textContent = printed ? 'Download PDF' : 'Download STL File';
+      document.getElementById('result-say').textContent = {
+        stickers: 'Your stickers are ready!', towel: 'Your towel is ready!', tote: 'Your tote bag is ready!',
+      }[choice.make] || 'Your Mii is ready!';
+      document.getElementById('result-text').textContent = printed
+        ? (print.mirror ? 'Print it at 100% (Actual size) on the transfer paper, then iron it on.'
+          : 'Print it at 100% (Actual size), not Fit to page, so everything comes out the right size.')
+        : 'Your 3D Mii STL file has been generated successfully.';
       setStage('result');
     } catch (err) {
       setStage('input');

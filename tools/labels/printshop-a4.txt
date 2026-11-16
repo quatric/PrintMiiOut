@@ -1,0 +1,145 @@
+# The Print Shop 4 supported A4 label templates (https://www.mackiev.com/printshop4/projects_matching.html?format=a4),
+# kind|part description|size. Kinds: N name badges, A address and shipping
+# labels, O other labels. Sizes as listed: inches for US, mm for A4.
+N|4820 Combi Badge|90 x 54
+N|4821 Pin Badge|75 x 40
+N|4822 Clip Badge|90 x 60
+N|L4726 Name Badge|75 x 40
+N|L4784 Self Adhesive Name Badge|63,5 x 29,6
+N|L4785 Self Adhesive Name Badge|80 x 50
+N|L4786/L4787 Self Adhesive Name Badge with Frame|80 x 50
+N|L4788 Self Laminating Name Badge|83 x 51
+N|L4789 Fold and Clip Badge|60 x 90
+N|L4797 2-in-1 Invitation & Name Badge|80 x 50
+N|L7418 Name Badge|86 x 55
+A|J8159 Addressing Label|63,5 x 33,9
+A|J8160/C2160 Addressing Label|63,5 x 38,1
+A|J8162 Addressing Label|99,1 x 34
+A|J8163 Addressing Label|99,1 x 38,1
+A|J8161 Addressing Label|63,5 x 46,6
+A|L7165 BlockOutShipping Label|99,1 x 67,7
+A|J8167 Addressing Label|199,6 x 289,1
+A|J8168 Addressing Label|199,6 x 143,5
+A|J8169 Addressing Label|139 x 99,1
+A|L7173 QuickPEELAddressing Label|99,1 x 57
+A|J8164 Addressing Label|63,5 x 72
+A|L4776 Heavy Duty Label|99,1 x 42,3
+A|J8166 Addressing Label|99,1 x 93,1
+A|L7166 BlockOutShipping Label|99,1 x 93,1
+A|L7159 QuickPEELAddressing Label|63,5 x 33,9
+A|L7162 QuickPEELAddressing Label|99,1 x 34
+A|L7163 QuickPEELAddressing Label|99,1 x 38,1
+A|L7167 BlockOutShipping Label|199,6 x 289,1
+A|L7168 BlockOutShipping Label|199,6 x 143,5
+A|L7169 BlockOutShipping Label|139 x 99,1
+A|L7651 Mini Label|38,1 x 21,2
+A|J8651 Mini Label|38,1 x 21,2
+A|L7164 QuickPEELAddressing Label|63,5 x 72
+A|L7567 Clear Label|210 x 297
+A|3421 Multi-Function Label|70 x 25,4
+A|3424 Multi-Function Label|105 x 48
+A|3425 Multi-Function Label|105 x 57
+A|3427 Multi-Function Label|105 x 74
+A|3474 Multi-Function Label|70 x 37
+A|3475 Multi-Function Label|70 x 36
+A|3478 Multi-Function Label|210 x 297
+A|3483 Multi-Function Label|148 x 105
+A|3484 Multi-Function Label|105 x 37
+A|3651 Multi-Function Label|52,5 x 29,7
+A|3652 Multi-Function Label|70 x 42,3
+A|3653 Multi-Function Label|105 x 42,3
+A|3655 Multi-Function Label|210 x 148
+A|3663 Multipurpose Label|38 x 21,2
+A|3657 Multi-Function Label|48.5 x 25.4
+A|3658 General Usage Label|64.6 x 33.8
+A|3659 General Usage Label|97 x 42.3
+A|3660 General Usage Label|97 x 67.7
+A|3661 Multi-Function Label|70 x 67.7
+A|3664 Multi-Function Label|70 x 33.8
+A|3665 General Usage Label|105 x 33.8
+A|3667 Multi-Function Label|48.5 x 16.9
+A|3656 Multi-Function Label|70 x 42.3
+A|3654 Multi-Function Label|105 x 42.3
+A|3666 Multi-Function Label|38 x 21,2
+A|3668 Multi-Function Label|52,5 x 21,2
+A|L30063 A5 Addressing Label|99,1 x 38,1
+A|L30065 A5 Addressing Label|99,1 x 67,7
+A|L7173B BlockOutShipping Label|99,1 x 57
+A|L7962 Repositionable Addressing Label|99,1 x 33,9
+A|L7963 Repositionable Addressing Label|99,1 x 38,1
+A|L7965 Repositionable Shipping Label|99,1 x 67,7
+A|L7966 Repositionable Shipping Label|99,1 x 93,1
+A|L7973 Repositionable Shipping Label|99,1 x 57
+A|L7980 2 in 1 BlockOutShipping Label & Notes|176 x 126
+A|L7990 Warning Label|99,1 x 67,7
+A|L7991 Warning Label|142 x 50
+A|L7993 Weatherproof Shipping Label|99,1 x 67,7
+A|L7994 Weatherproof Shipping Label|139 x 99,1
+A|LR7162 QuickPEELRecycled Label|99,1 x 34
+A|LR7167 QuickPEELRecycled Label|199,6 x 289,1
+A|LR7168 QuickPEELRecycled Label|199,6 x 143,5
+O|L5202 Signalling Star Fluoro Label|Ø 57
+O|E3210 Removable Multipurpose Mini Label|25,4 x 10
+O|E3211 Removable Multipurpose Small Label|38,1 x 21,2
+O|E3212 Removable Multipurpose Rectangular Label|99,1 x 38,1
+O|E3213 Removable Multipurpose Square Label|63,5 x 72
+O|E3230 Assorted Coloured Label|63,5 x 33,9
+O|E3240 Iron on T-Shirt Transfer|148,43 x 210
+O|E3410 Durable Label|139 x 99,1
+O|E3411 Durable Label|199,6 x 143,5
+O|E3420 Pre-Laminated Sheet|150 x 100
+O|E3421 Pre-Laminated Sheet|170 x 257
+O|E3430 Self-Cling Sheet|190 x 275
+O|E3440 Changeable Sign Slots|190 x 275
+O|E3610 Create your own... Star Stickers|Ø 40
+O|E3612 Create your own... Speech Bubble Stickers|70 x 35
+O|E3613 Create your own... Round Stickers|Ø 40
+O|E3614 Create your own... Think Bubble Stickers|90.3 x 41.5
+O|J8102/L7101 Oval Product Label|63,5 x 42,3
+O|J8105/L7104 Round Product Label|Ø 60
+O|J8109/L7107 Rectangular Product Label|62 x 42
+O|L7103 Oval Brown Kraft Product Label|63,5 x 42,3
+O|L7106 Round Brown Kraft Product Label|Ø 60
+O|L7108 Rectangular Removable Product Label|62 x 89
+O|L7110 Brown Kraft Product Label|62 x 42
+O|L7111 Textured Product Label|62 x 58
+O|L7115 Removable Price Label|26 x 16
+O|L7116 Removable Self-Cling Sign|190 x 275
+O|L7117 Self-Laminating Adhesive Sign|170 x 257
+O|L7120 QR Code Label|35 x 35
+O|L7121 QR Code Label|45 x 45
+O|L7122 QR Code Label|80 x 35
+O|C9405 T-shirt Transfer|210 x 297
+O|J4775 Heavy Duty Label|210 x 297
+O|J8654 Mini Label|45,7 x 25,4
+O|J8657 Mini Label|46 x 11,1
+O|J8658 Mini Label|25,4 x 10
+O|J8659 Mini Label|17,8 x 10
+O|L4732 Removable Mini Label|35,6 x 16,9
+O|L4744 Removable Label|96 x 50,8
+O|L4745 Removable Label|96 x 63,5
+O|L6012 Silver Heavy Duty Label|96 x 50,8
+O|L6112 Security Anti-Tamper Label|Ø 40
+O|L6113 Security Anti-Tamper Label|45,7 x 21,2
+O|L6114 Security Anti-Tamper Label|63,5 x 29,6
+O|L7085 Self-Laminating Adhesive Sign|67,5 x 255
+O|L7086 Self-Laminating Adhesive Sign|150 x 100
+O|L7087 Self-Laminating Adhesive Sign|170 x 257
+O|L7090 Durable Sign|190 x 135
+O|L7091 Durable Sign|190 x 275
+O|L7552 Clear Mini Label|55 x 12,7
+O|L7553 Clear Mini Label|22 x 12,7
+O|L7632 Mini Label|35,6 x 16,9
+O|L7656 Mini Label|46 x 11,1
+O|L7670 Promotional Label|Ø 63,5
+O|L7767 Glossy Colour Label|209 x 295
+O|L7780 Crystal ClearRound Label|Ø 40
+O|L7781 Crystal ClearLabel|45,7 x 25,4
+O|L7783 Crystal ClearLabel|96 x 50,8
+O|MD1001 Textile Transfer|210 x 297
+O|MD1003 Textile Transfer|210 x 297
+O|MD3001 Decorative Transfer|210 x 297
+O|MD3002 Glass Transfers|210 x 297
+O|MD4001 Bottle Label|90 x 120
+O|MD4004 Magnetic Sticker|Ø 40
+O|MD5003/MD5004 Textile Transfer|210 x 297

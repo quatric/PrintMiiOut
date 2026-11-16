@@ -1,0 +1,167 @@
+# The Print Shop 4 supported US Letter label templates (https://www.mackiev.com/printshop4/projects_matching.html?format=us),
+# kind|part description|size. Kinds: N name badges, A address and shipping
+# labels, O other labels. Sizes as listed: inches for US, mm for A4.
+N|5361 Laminated ID Card|2 x 3-1/4
+N|5390 Name Badge Insert|2-1/4 x 3-1/2
+N|5395 Adhesive Name Badge|2-1/3 x 3-3/8
+N|5384 Garment FriendlyClip Style Name Badge|3 x 4
+N|5392 Name Badge Insert|3 x 4
+N|74459 Hanging Name Badge|3 x 4
+N|74558 Clip Style Name Badge|2 x 3
+N|74553 Fold & Clip Name Badge|4 x 3
+N|2940/2941 Photo ID Adhesive Badge Label|2-1/4 x 3-1/2
+N|2942/2943 Photo ID Badge Insert|2-1/4 x 3-1/2
+N|2944/2945 Photo ID Badge Insert|4 x 3
+N|2946/2951 Photo ID Laminated Fold Badge|2-1/16 x 3-1/3
+N|2947 Photo ID Fold & Clip Badge|2-1/16 x 3-1/3
+N|2948 Fold & Clip Photo ID Badge|2-1/16 x 3-1/3
+N|2949 Photo ID Fold & Clip Badge|2-15/16 x 3-7/8
+N|2960 ID Badge Label|3-1/2 x 2-1/8
+N|2961 Photo ID Fold & Clip Badge|7 x 2-1/8
+N|2962 Fold & Clip Name Badge|7 x 2-1/8
+N|2990/2992 Photo ID Access Control Label|2-1/8 x 3-3/8
+N|2991/2993 Photo ID Access Control Label|2-1/8 x 3-3/8
+N|41006 Name Badge Label with Border|2-5/16 x 3-3/8
+N|5140/5141 Name Badge Label with Border|2-5/16 x 3-3/8
+N|5147 Name Badge Label|2-5/16 x 3-3/8
+N|5153 Mini Flexible Name Badge Label|2-5/16 x 3-3/8
+N|74520 Hanging Style Name Badge|3 x 4
+N|74554 Fold & Clip Name Badge|2-1/4 x 3-1/2
+N|74652 Pin Style Name Badge|2-1/4 x 3-1/2
+A|5160 Address Label|1 x 2-5/8
+A|5161/5261 Address Label|1 x 4
+A|5162/5262 Address Label|1-1/3 x 4
+A|5267/5667 Return Address Label|1/2 x 1-3/4
+A|8161 Address Label|1 x 4
+A|8162 Address Label|1-1/3 x 4
+A|8250 Address Label|1 x 2-5/8
+A|8252 Address Label|1-1/3 x 4
+A|8167 Return Address Label|1/2 x 1-3/4
+A|8160 Address Label|1 x 2-5/8
+A|2160 Mailing Label|1 x 2-5/8
+A|15695 Clear Return Address Label|2/3 x 1-3/4
+A|8920 Easy PeelAddress Label|1 x 2-5/8
+A|5195 Return Address Label|2/3 x 1-3/4
+A|8195 Return Address Label|2/3 x 1-3/4
+A|5522 WeatherProofAddress Label|1-1/3 x 4
+A|6871 Address Label|1-1/4 x 2-3/8
+A|5735 Send & Reply Piggyback Label|1 x 3
+A|8986/8987 Foil Mailing Label|3/4 x 2-1/4
+A|5163 Shipping Label|2 x 4
+A|5164 Shipping Label|3-1/3 x 4
+A|8164 Shipping Label|3-1/3 x 4
+A|8253 Shipping Label|2 x 4
+A|8254 Shipping Label|3-1/3 x 4
+A|5168 Shipping Label|3-1/2 x 5
+A|6878 Shipping Label|3-3/4 x 4-3/4
+A|8168 Shipping Label|3-1/2 x 5
+A|5126 Shipping Label|5-1/2 x 8-1/2
+A|18163 Shipping Label|2 x 4
+A|6873 Shipping Label|2 x 3-3/4
+A|5523 WeatherProofShipping Label|2 x 4
+A|6879 Shipping Label|1-1/4 x 3-3/4
+A|6874 Shipping Label|3 x 3-3/4
+A|6876 Shipping Label|4-3/4 x 7-3/4
+A|5127 Shipping Label with Paper Receipt|5 x 7-3/5
+A|2162 Shipping Label|1-1/3 x 4
+A|2163 Shipping Label|2 x 4
+A|5165/5265 Full-Sheet Shipping Label|8-1/2 x 11
+O|5979 High-Visibility Neon Label|1 x 2-5/8
+O|6464 Removable ID Label|3-1/3 x 4
+O|6467 Removable ID Label|1/2 x 1-3/4
+O|6460 Removable ID Label|1 x 2-5/8
+O|5293 High-Visibility Label|Ø 1-2/3
+O|8293 High-Visibility Label|Ø 1-1/2
+O|5294 High-Visibility Label|Ø 2-1/2
+O|3271 T-shirt Transfer|8-1/2 x 11
+O|8257 Label|3/4 x 2-1/4
+O|6572 Permanent ID Label|2 x 2-5/8
+O|6582 Clear Permanent Multipurpose Label|Ø 1-5/8
+O|22809 Textured Arched Label|8-1/2 x 11
+O|22808 Print-to-the-Edge Kraft Brown Round Label|Ø 2-1/2
+O|22807 Print-to-the-Edge Round Label|2
+O|22806 Square Label|2
+O|22805 Square Label|1-1/2 x 1-1/2
+O|22804 Print-to-the-Edge Oval Label|1-1/2 x 2-1/2
+O|5410 Multi-Use Label|Ø 1
+O|6583 Multipurpose Oval Label|1-1/2 x 2-1/2
+O|5214 Multi-Use Label|1-1/2 x 1-1/2
+O|5868 Metallic Gold Notarial Seals|Ø 2
+O|5490 Color Coding Label|2 x 4
+O|6570 Multipurpose Label|1-1/4 x 1-3/4
+O|6577 Durable Multipurpose Label|5/8 x 3
+O|6573 Permanent Multipurpose Label|5 x 8-1/8
+O|5450 Multi-Use Label|3 x 5
+O|5453 Multi-Use Label|3 x 4
+O|5454 Multi-Use Label|4 x 6
+O|6475 High Visibility Label, Assorted Neon Colors|3-1/3 x 4
+O|6471 Organization Label|1 x 2-5/8
+O|6591 Durable Cord Tag|2-1/4 x 3
+O|5994 High-Visibility Label, Assorted Neon Colors|Ø 1-1/2
+O|5995 High-Visibility Label, Assorted Neon Colors|Ø 2-1/4
+O|2222 Removable Multi-Use Label|2 x 3
+O|3270 Magnet Sheet|8-1/2 x 11
+O|3383 Sticker Project Paper|8-1/2 x 11
+O|3384 Fabric|8-1/2 x 11
+O|4322 Durable Multi-Use Label|1-1/3 x 4
+O|4384/4385 T-shirt Transfer|4 x 6
+O|44320 Durable Label|1-1/4 x 1-3/4
+O|5105 Removable Multi-Use Label|1 x 2-5/8
+O|5109 Removable Multi-Use Label|1/2 x 7/8
+O|5124 Removable Multi-Use Label|1-1/4 x 3-1/2
+O|5247 Mailing Seal|1 Ø
+O|5258 Gold Metallic Mailing Seal|1 Ø
+O|5277 Transparency|8-1/2 x 11
+O|5278 Booklet Seal|1-1/2 Ø
+O|53213 Border Sticker Paper|8-1/2 x 14
+O|53214 Journaling Sticker Paper|8-1/2 x 11
+O|53218 Fabric & T-Shirt Transfer Sheet|8-1/2 x 14
+O|5407 Assorted Color Coding Label|Ø 1-1/4
+O|5408 Removable Multi-Use Label|Ø 3/4
+O|5418 Removable Multi-Use Label|1/2 x 3/4
+O|5422 Removable Multi-Use Label|1/2 x 1-3/4
+O|5428 Removable Multi-Use Label|3/4 x 1
+O|5430 Removable Multi-Use Label|3/4 x 1-1/2
+O|5434 Removable Multi-Use Label|1 x 1-1/2
+O|5436 Removable Multi-Use Label|1 x 3
+O|5440 Removable Multi-Use Label|1-1/2 x 3
+O|5452 Removable Multi-Use Label|4 x 1-1/2
+O|5456 Permanent Multi-Use Oval Label|1 3/5 x 27/32
+O|5474 Color Coding Label|Ø 3/4
+O|5476 Color Coding Label|Ø 1-1/4
+O|5477 Removable Color Coding Label|1 x 3
+O|22850/22800 Removable Wall and Window Signage|8-1/2 x 11
+O|53212 Clear Decal for Windows|8-1/2 x 11
+O|5481 Assorted Color Color Coding Label|1 x 3
+O|22803 Removable Shelf Tag|2 x 3-1/2
+O|22802 Tag|2 x 3-1/2
+O|22801 Bag Topper|1-3/4 x 5
+O|72432 Classic Brown Kraft Label|4 x 1-1/3
+O|72435 Permanent Classic Label|4 x 1-1/3
+O|72451 Metallic Classic Label|4 x 1-1/3
+O|72474 Removable Classic Label|4 x 1-1/3
+O|72427 Classic Brown Kraft Label|3-3/4 x 2-1/2
+O|72428 Flourish Brown Kraft Label|1-3/4 x 1-2/3
+O|72429 Classic Brown Kraft Label|1-3/4 x 1-2/3
+O|72430 Classic Brown Kraft Label|3-3/4 x 1 1/5
+O|72433 Weatherproof Classic Label|3-3/4 x 2-1/2
+O|72437 Permanent Classic Label|3-3/4 x 2-1/2
+O|72434 Weatherproof Classic Label|3-3/4 x 7/8
+O|72436 Permanent Classic Label|3-3/4 x 5-1/5
+O|72438 Textured Oval Label|3-3/4 x 2-1/2
+O|72443 Textured Oval Label|3-3/4 x 2-1/2
+O|72439 Textured Classic Label|3-3/4 x 1-2/3
+O|72468 Removable Classic Label|3-3/4 x 1-2/3
+O|72478 Removable Classic Label|1-5/8 x 3-3/4
+O|72440 Textured Rectangle Label|3-3/4 x 1-2/3
+O|72441/72442 Textured Rectangle Label|9/16 x 2-1/2
+O|72458 Classic File Folder Label|3-1/2 x 5/8
+O|72461/72462 Classic To From Label|3-3/4 x 2-1/2
+O|72465/72466 Removable Classic Label|3-3/4 x 5-1/5
+O|72467 Removable Classic Label|3-3/4 x 2-1/2
+O|72469 Removable Classic Label|3-3/4 x 1 1/5
+O|72470/72471 Removable Classic Label|1-3/4 x 1-2/3
+O|72472 Removable Flourish Label|1-3/4 x 1-2/3
+O|72473 Removable Flourish Label|1-3/4 x 1-2/3
+O|72475 Classic Brown Kraft Label|3-3/4 x 5-1/5
+O|72500/72501 Flourish Name Badge|3-3/4 x 2-1/2

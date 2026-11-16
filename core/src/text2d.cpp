@@ -129,4 +129,90 @@ Line Font::layOut(const std::string& utf8) const {
 	return line;
 }
 
+TextPath Font::outline(const std::string& utf8) const {
+	TextPath out;
+	if (!ok_) return out;
+	const stbtt_fontinfo* info = &impl_->info;
+	const double s = impl_->scale;
+	int ascent = 0, descent = 0, gap = 0;
+	stbtt_GetFontVMetrics(info, &ascent, &descent, &gap);
+	out.ascent = ascent * s;
+	out.descent = descent * s;
+	double pen = 0;
+	int prev = 0;
+	for (char32_t cp : decodeUtf8(utf8)) {
+		if (cp < 0x20 || (cp >= 0x7F && cp < 0xA0)) continue;
+		int g = stbtt_FindGlyphIndex(info, int(cp));
+		if (!g) {
+			out.missing++;
+			continue;
+		}
+		if (prev) pen += stbtt_GetGlyphKernAdvance(info, prev, g) * s;
+		int adv = 0, lsb = 0;
+		stbtt_GetGlyphHMetrics(info, g, &adv, &lsb);
+		OutlineGlyph glyph;
+		glyph.cp = cp;
+		glyph.x = pen;
+		glyph.advance = adv * s;
+		stbtt_vertex* v = nullptr;
+		int n = stbtt_GetGlyphShape(info, g, &v);
+		std::vector<float>& path = glyph.path;
+		float ax = 0, ay = 0;
+		bool open = false, inked = false;
+		auto ink = [&](double x, double y) {
+			glyph.x0 = inked ? std::min(glyph.x0, x) : x;
+			glyph.y0 = inked ? std::min(glyph.y0, y) : y;
+			glyph.x1 = inked ? std::max(glyph.x1, x) : x;
+			glyph.y1 = inked ? std::max(glyph.y1, y) : y;
+			inked = true;
+		};
+		for (int k = 0; k < n; k++) {
+			float x = float(v[k].x * s), y = float(v[k].y * s);
+			switch (v[k].type) {
+			case STBTT_vmove:
+				if (open) path.push_back(3);
+				path.insert(path.end(), {0, x, y});
+				open = true;
+				break;
+			case STBTT_vline:
+				path.insert(path.end(), {1, x, y});
+				break;
+			case STBTT_vcurve: {
+				// A quadratic through c is the cubic with controls 2/3 of
+				// the way from each end to c.
+				float cx = float(v[k].cx * s), cy = float(v[k].cy * s);
+				path.insert(path.end(), {2, ax + (cx - ax) * 2 / 3, ay + (cy - ay) * 2 / 3, x + (cx - x) * 2 / 3,
+				                         y + (cy - y) * 2 / 3, x, y});
+				ink(cx, cy);
+				break;
+			}
+			case STBTT_vcubic:
+				path.insert(path.end(), {2, float(v[k].cx * s), float(v[k].cy * s), float(v[k].cx1 * s),
+				                         float(v[k].cy1 * s), x, y});
+				ink(v[k].cx * s, v[k].cy * s);
+				ink(v[k].cx1 * s, v[k].cy1 * s);
+				break;
+			}
+			ink(x, y);
+			ax = x;
+			ay = y;
+		}
+		if (open) path.push_back(3);
+		stbtt_FreeShape(info, v);
+		// The control points bound the curve; the font's own box is tighter.
+		int bx0, by0, bx1, by1;
+		if (inked && stbtt_GetGlyphBox(info, g, &bx0, &by0, &bx1, &by1)) {
+			glyph.x0 = bx0 * s;
+			glyph.y0 = by0 * s;
+			glyph.x1 = bx1 * s;
+			glyph.y1 = by1 * s;
+		}
+		pen += glyph.advance;
+		out.glyphs.push_back(std::move(glyph));
+		prev = g;
+	}
+	out.advance = pen;
+	return out;
+}
+
 }  // namespace pmo

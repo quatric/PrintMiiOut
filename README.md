@@ -1,6 +1,6 @@
 # PrintMiiOut
 
-PrintMiiOut converts Nintendo Mii characters into 3D-printable STL models. Enter an NNID/PNID, upload a binary file or QR code, and export a ready-to-print 3D model, built right in your browser.
+PrintMiiOut converts Nintendo Mii characters into 3D-printable STL models. Enter an NNID/PNID, upload a binary file or QR code, and export a ready-to-print 3D model, built right in your browser. It also prints sticker sheets, and towel and tote bag designs, as PDFs for your regular printer.
 
 ## Features
 - **Multiple Input Sources**: Fetch Miis by Nintendo Network ID (NNID), Pretendo Network ID (PNID), binary `.mii` / `.ffsd` files, or QR code images.
@@ -11,6 +11,8 @@ PrintMiiOut converts Nintendo Mii characters into 3D-printable STL models. Enter
 - **Print-in-Place Bobblehead**: The head hangs on a ball at the top of a post rising from the body, and prints around it with the ball already inside, so it nods straight off the printer. The ball sits just above the head's centre of mass (found from the solid head, not its shell), so the head hangs upright and rocks back to rest; its chamber has a pointed roof and a flared channel for the post, so it prints without support inside. The head is raised clear of the shoulders to give it room to swing. Print with supports under the head, then wiggle it to free the ball. The **Fit** slider widens or narrows the gap round the ball.
 - **Coins**: The face drawn flat like a sticker, from the same 3D head seen straight on (hair and beard filled, the face and cap outlined, the eyes, brows, mouth and glasses traced from their textures, with lines too fine to print thickened), on a round or rounded-square coin, with or without a rim, raised or engraved. It can be lettered with the Mii's name (read from the Mii data) or any text, arched over the top or straight above or below, in Rodin NTLG Pro.
 - **Stamps for an Ink Pad**: A round name stamp in three pieces: a bullet-shaped grip with a thumb dip and a strap hole, a face plug that prints face up (so the face comes out crisp) and presses into the grip on crush ribs with a key so it only goes in one way round, and a cap. A square stamp has a base, a face plate, a domed top that carries a raised preview of the design, two pins and a cap. Stamped, the face and text read the right way round. Ink them with a stamp pad.
+- **Sticker Sheets**: A PDF sheet of name stickers after the one Wii no Ma's Mii sticker shop printed (Miiのお名前シール): the face in big squares, circles with the name arched under it, checked ovals, rows of name labels in yellow, white, blue and green, vertical labels with the name stacked down, and striped labels, each with a dashed line to cut along. Names are vector glyph outlines in Rodin NTLG, so they print sharp at any size; the face is the Mii API's colour render, or the stamps' line art in an ink colour. Six colour schemes (classic, pastel, rainbow, pink, sky, and black and white). It prints on plain sticker paper, or on any of the Avery label sheets [The Print Shop 4](https://www.mackiev.com/printshop4/projects_matching.html?format=us) supports, US Letter or A4: each label gets a sticker that suits its shape (face and name side by side on wide labels, stacked on tall ones, arched round circles, a check on ovals, the whole sheet on full-page labels), in a mix of colours, with a little bleed past each edge, and the label edges can be drawn to test on plain paper first.
+- **Towel and Tote Bag**: Designs after the ones printed with a Mii stamp's line art: a towel or handkerchief with a field of dots, the diagonals in ink, and the face and name small in the corner; and a tote bag badge with the face in a ring lettered with the name top and bottom. In the colours of Shachihata's stamp inks (blue, black, green, red, purple) or pink, mirrored for iron-on transfer paper if you like.
 - **Web Interface**: Clean, responsive web UI built with Flask and Vanilla CSS.
 
 ## Checking the body against FFL.js
@@ -37,11 +39,17 @@ python tools/bake_body.py miiBodyM_wiiu_plain.glb static/client/miiBodyM.glb
 python tools/bake_body.py miiBodyF_wiiu_plain.glb static/client/miiBodyF.glb
 ```
 
-The font coins and stamps are lettered in (`static/fonts/RodinNTLGPro-B-print.otf`) is Rodin NTLG Pro B cut down to Latin, Greek, Cyrillic, kana, the JIS X 0208 kanji and the symbols Mii names use; the browser fetches it only when there is text:
+The font coins and stamps are lettered in (`static/fonts/RodinNTLGPro-B-print.otf`) is Rodin NTLG Pro B cut down to Latin, Greek, Cyrillic, kana, the JIS X 0208 kanji and the symbols Mii names use; the browser fetches it only when there is text (and for every printed design):
 
 ```bash
 pip install fonttools
 python tools/subset_font.py ~/Library/Fonts.old/FOT-RodinNTLGPro-B.otf static/fonts/RodinNTLGPro-B-print.otf
+```
+
+The label sheets (`static/client/labels.json`) are the ones The Print Shop 4 lists (`tools/labels/printshop-*.txt`), with each sheet's layout from LibreOffice's label database or gLabels' templates, and the few in neither from the margins on Avery's product pages; every layout is checked against Print Shop's label size and the paper:
+
+```bash
+python tools/labels.py labels.xml avery-us-templates.xml avery-iso-templates.xml > static/client/labels.json
 ```
 
 To compare two STLs side by side (say before and after a change), `tools/reference` takes `--a before.stl --b after.stl`, with `--face` or `--box x0,y0,z0,x1,y1,z1` to zoom in.
@@ -50,6 +58,7 @@ To compare two STLs side by side (say before and after a change), `tools/referen
 - **3D processing**: In the browser by [assimp](https://github.com/assimp/assimp), [stb_image](https://github.com/nothings/stb) and stb_truetype.
 - **Body scaling**: Rules from [FFL.js](https://github.com/ariankordi/FFL.js) by Arian Kordi, after Nintendo's own editor body.
 - **Lettering font**: Rodin NTLG Pro by Fontworks.
+- **Label sheets**: Layouts from [LibreOffice](https://github.com/LibreOffice/core)'s label database (extras/source/labels/labels.xml) and [gLabels](https://github.com/jimevins/glabels-qt)' templates; the list of sheets from [The Print Shop 4](https://www.mackiev.com/printshop4/). Avery is a trademark of Avery Products Corporation.
 - **Display font**: [Nintendo U Version 3](https://www.deviantart.com/dledeviant/art/Nintendo-U-Version-3-595000916) by dledeviant, free for non-commercial use.
 - **Background tiles**: from [mii-unsecure](https://mii-unsecure.ariankordi.net/) by Arian Kordi, used with permission.
 - **Mii rendering**: Powered by [mii-unsecure.ariankordi.net](https://mii-unsecure.ariankordi.net/) by Arian Kordi.

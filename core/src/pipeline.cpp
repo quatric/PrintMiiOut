@@ -850,12 +850,16 @@ Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Opt
 	return all;
 }
 
-/** A coin or a stamp: the head drawn flat from the front, with lettering. */
-Mesh flatMii(std::vector<Part>& parts, Bytes maskBytes, const Options& o,
-             const std::function<void(const std::string&)>& log, const std::function<void(const char*)>& tick) {
+/** The head's parts ready to draw flat, and what they draw in (head units). */
+struct FlatParts {
 	Image external;
-	if (maskBytes.size && !external.load(maskBytes.data, maskBytes.size)) log("Warning: could not read the mask PNG");
-	std::vector<FacePart> faceParts;
+	std::vector<FacePart> parts;
+	FaceSource source;
+};
+
+void prepareFlat(std::vector<Part>& parts, Bytes maskBytes, FlatParts& out,
+                 const std::function<void(const std::string&)>& log) {
+	if (maskBytes.size && !out.external.load(maskBytes.data, maskBytes.size)) log("Warning: could not read the mask PNG");
 	for (Part& p : parts) {
 		bool overlay = has(p.name, "Mask") || has(p.name, "NoseLine") || has(p.name, "Glass") || has(p.name, "Xlu");
 		weld(p.mesh, 0.0001);
@@ -863,18 +867,17 @@ Mesh flatMii(std::vector<Part>& parts, Bytes maskBytes, const Options& o,
 		FacePart f;
 		f.name = p.name;
 		f.mesh = &p.mesh;
-		f.texture = has(p.name, "Mask") && !external.empty() ? &external : &p.texture;
-		faceParts.push_back(f);
+		f.texture = has(p.name, "Mask") && !out.external.empty() ? &out.external : &p.texture;
+		out.parts.push_back(f);
 	}
-	tick("import and smooth shells");
 
 	// What is drawn, from a quick drawing: its box.
 	double x0, z0, x1, z1;
-	faceBounds(faceParts, x0, z0, x1, z1);
+	faceBounds(out.parts, x0, z0, x1, z1);
 	if (!(x1 > x0)) throw std::runtime_error("head: nothing to draw");
 	const double unit = x1 - x0;
-	FaceArt rough = drawFace(faceParts, unit / 200, unit / 120, 0);
-	FaceSource source;
+	FaceArt rough = drawFace(out.parts, unit / 200, unit / 120, 0);
+	FaceSource& source = out.source;
 	source.x0 = source.z0 = 1e300;
 	source.x1 = source.z1 = -1e300;
 	for (int j = 0; j < rough.head.h; j++)
@@ -885,7 +888,16 @@ Mesh flatMii(std::vector<Part>& parts, Bytes maskBytes, const Options& o,
 				source.z0 = std::min(source.z0, rough.head.cy(j) - rough.head.px);
 				source.z1 = std::max(source.z1, rough.head.cy(j) + rough.head.px);
 			}
-	source.draw = [&](double px, double line, double minWidth) { return drawFace(faceParts, px, line, minWidth); };
+	const std::vector<FacePart>* drawn = &out.parts;
+	source.draw = [drawn](double px, double line, double minWidth) { return drawFace(*drawn, px, line, minWidth); };
+}
+
+/** A coin or a stamp: the head drawn flat from the front, with lettering. */
+Mesh flatMii(std::vector<Part>& parts, Bytes maskBytes, const Options& o,
+             const std::function<void(const std::string&)>& log, const std::function<void(const char*)>& tick) {
+	FlatParts flat;
+	prepareFlat(parts, maskBytes, flat, log);
+	const FaceSource& source = flat.source;
 	tick("face art");
 
 	Font font;
@@ -949,6 +961,42 @@ std::vector<uint8_t> exportSTL(const Mesh& m) {
 }
 
 }  // namespace
+
+FlatFace drawFlatFace(Bytes headBytes, Bytes maskBytes, int across) {
+	std::vector<Part> parts = loadHead(headBytes);
+	FlatParts flat;
+	prepareFlat(parts, maskBytes, flat, [](const std::string&) {});
+	const FaceSource& src = flat.source;
+	across = std::max(64, std::min(across, 4096));
+	// Drawn at twice the size and averaged down, for smooth edges. Lines as
+	// bold as the stamps' and nothing finer than a printer keeps.
+	const double width = src.x1 - src.x0, px = width / (2 * across);
+	FaceArt art = src.draw(px, width / 48, width / 90);
+	const double pad = width * 0.01;
+	const int i0 = std::max(0, int(std::floor((src.x0 - pad - art.ink.x0) / px)));
+	const int i1 = std::min(art.ink.w, int(std::ceil((src.x1 + pad - art.ink.x0) / px)));
+	const int j0 = std::max(0, int(std::floor((src.z0 - pad - art.ink.y0) / px)));
+	const int j1 = std::min(art.ink.h, int(std::ceil((src.z1 + pad - art.ink.y0) / px)));
+	FlatFace out;
+	out.width = (i1 - i0) / 2;
+	out.height = (j1 - j0) / 2;
+	out.ink.assign(size_t(out.width) * out.height, 0);
+	out.head.assign(out.ink.size(), 0);
+	for (int y = 0; y < out.height; y++)
+		for (int x = 0; x < out.width; x++) {
+			int ink = 0, head = 0;
+			for (int dy = 0; dy < 2; dy++)
+				for (int dx = 0; dx < 2; dx++) {
+					// Rows go top down; the grid's go up.
+					int i = i0 + 2 * x + dx, j = j1 - 1 - (2 * y + dy);
+					ink += art.ink.at(i, j) ? 1 : 0;
+					head += art.head.at(i, j) ? 1 : 0;
+				}
+			out.ink[size_t(y) * out.width + x] = uint8_t(ink * 255 / 4);
+			out.head[size_t(y) * out.width + x] = uint8_t(head * 255 / 4);
+		}
+	return out;
+}
 
 std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes, const Options& o) {
 	using clock = std::chrono::steady_clock;

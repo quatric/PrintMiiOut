@@ -134,6 +134,14 @@ def _mii_png_url(params: dict) -> str:
     return _build_mii_url("/miis/image.png", png_params)
 
 
+def _mii_face_url(params: dict) -> str:
+    """The Mii's head drawn in colour, facing front on a clear background,
+    as sticker sheets print it."""
+    face_params = {k: params[k] for k in ("data", "nnid", "api_id", "expression") if params.get(k)}
+    face_params.update(type="face_only", width="1024")
+    return _build_mii_url("/miis/image.png", face_params)
+
+
 def _mii_raw(form_params: dict) -> bytes | None:
     """The Mii's data, looking an NNID or PNID up if need be, or None when
     the lookup fails or the data cannot be read."""
@@ -225,6 +233,9 @@ LLMS_TXT = f"""# PrintMiiOut (printmiiout.com)
   - a coin or token with the face drawn flat (round or rounded square, with or without a rim, raised or engraved), lettered with the Mii's name or any text in Rodin NTLG;
   - a round self-inking-style name stamp for an ink pad: a bullet-shaped grip, a face plug that prints face up and presses into it, and a cap;
   - a square stamp with a domed top showing the design, a face plate, two pins and a cap.
+- For a regular printer it draws PDFs:
+  - a sheet of name stickers after Wii no Ma's Mii sticker shop (Miiのお名前シール), in six colour schemes, with the face in colour or as a stamp's line art, on sticker paper or fitted to any of the Avery label sheets The Print Shop 4 supports (US Letter and A4);
+  - a towel design (a field of dots with the face and name in the corner) and a tote bag badge (the face in a ring lettered with the name), in Shachihata's stamp ink colours or pink, mirrored for iron-on transfers if wanted.
 
 ## Source
 
@@ -251,8 +262,10 @@ def llms_txt():
     return _text(LLMS_TXT, "text/plain")
 
 
-MAKES = ("figure", "bobblehead", "coin", "stamp", "square_stamp")
+MAKES = ("figure", "bobblehead", "coin", "stamp", "square_stamp", "stickers", "towel", "tote")
 FLAT_MAKES = ("coin", "stamp", "square_stamp")
+# Printed on paper rather than a 3D printer: the browser draws a PDF.
+PRINT_MAKES = ("stickers", "towel", "tote")
 TEXT_MAX = 32
 
 
@@ -408,7 +421,13 @@ def resolve():
         "make": c["make"].replace("_", "-"),
         "fit": c["fit"],
     }
-    if c["make"] in FLAT_MAKES:
+    if c["make"] in PRINT_MAKES:
+        text = c["text"]
+        if c["lettering"] == "name":
+            mii = raw()
+            text = _clean_text(miidata.name(mii)) if mii else ""
+        job.update(face=_mii_face_url(api_params), text=text)
+    elif c["make"] in FLAT_MAKES:
         text = c["text"]
         if c["lettering"] == "name":
             mii = raw()

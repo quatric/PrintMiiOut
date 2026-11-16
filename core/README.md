@@ -64,6 +64,16 @@ if (result.error) throw new Error(result.error);
 // result.stl: Uint8Array, a binary STL
 ```
 
+Sticker sheets, towels and tote bags are drawn as PDFs in JavaScript (`static/client/stickers.js` and `pdf.js`), with three more functions from the module:
+
+```js
+core.outlineText(fontBytes, ['Jasmine'])  // glyph outlines in em units, curves kept, kerned
+core.decodeImage(pngBytes)               // { width, height, rgba }
+core.drawFace(headGlb, maskPng, 1400)    // the face as line art: { width, height, ink, head }
+```
+
+`outlineText` gives each glyph's path as a Float32Array of commands (0 move, 1 line, 2 cubic, 3 close; quadratics come out as the cubics they equal) with its advance, kerned pen position and ink box. `drawFace` draws the head flat as coins and stamps carve it (`drawFlatFace` in `pipeline.cpp`), at twice the size and averaged down, and returns how much each pixel is inked and covered by the head, 0 to 255.
+
 `static/client/worker.js` runs it in a Web Worker and `static/client/browser-build.js` drives it from the page. The licenses of the code compiled into the module are in `static/client/THIRD_PARTY_LICENSES.txt`. A large Mii takes around 10 seconds and up to about 1 GB of memory; coins and stamps take a few seconds.
 
 ## Checking it

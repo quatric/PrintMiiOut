@@ -47,6 +47,8 @@ const NEXT_FLAT_STAGE = {
 	'shape the cap': 'Writing the STL…',
 };
 const FLAT = new Set(['coin', 'stamp', 'square-stamp']);
+// Printed on paper: the browser draws a PDF.
+export const PRINTS = new Set(['stickers', 'towel', 'tote']);
 // Rodin NTLG Pro B, cut down to the characters a name or a label uses.
 const FONT = new URL('../fonts/RodinNTLGPro-B-print.otf', import.meta.url);
 
@@ -65,11 +67,60 @@ async function fetchBytes(url, what) {
 	return new Uint8Array(await res.arrayBuffer());
 }
 
+/** Runs one job in a fresh worker; resolves to what it hands back. */
+function inWorker(message, transfer, onLog) {
+	const worker = new Worker(new URL('worker.js', import.meta.url), { type: 'module' });
+	return new Promise((resolve, reject) => {
+		worker.onmessage = ({ data }) => {
+			if (data.type === 'log') onLog && onLog(data.line);
+			else if (data.type === 'done') resolve(data);
+			else if (data.type === 'error') reject(new Error(data.message));
+		};
+		// An uncaught failure in the worker, most likely running out of memory.
+		worker.onerror = (e) => {
+			e.preventDefault();
+			reject(new Error('Your browser ran out of memory building this Mii. Close some other tabs and try again, or try it on a computer.'));
+		};
+		worker.postMessage(message, transfer);
+	}).finally(() => worker.terminate());
+}
+
 /**
- * form: the page's FormData, which /resolve reads. onStatus(text) hears progress.
- * Resolves to a Blob holding a binary STL.
+ * Stickers, a towel or a tote bag as a PDF. job: what /resolve said;
+ * print: the page's choices (paper, label, theme, faceStyle, ink and its
+ * colour, outlines, mirror).
  */
-export async function buildInBrowser(form, onStatus) {
+async function buildPrint(job, print, onStatus) {
+	const drawn = job.make !== 'stickers' || print.faceStyle === 'drawn';
+	const [photo, head, mask, font] = await Promise.all([
+		drawn ? null : fetchBytes(job.face, 'the picture of your Mii'),
+		drawn ? fetchBytes(job.glb, 'the Mii model') : null,
+		drawn ? fetchBytes(job.png, 'the face texture') : null,
+		fetchBytes(FONT, 'the font'),
+	]);
+	onStatus(job.make === 'stickers' ? 'Laying out your stickers…' : 'Drawing the design…');
+	const transfer = [font.buffer];
+	for (const b of [photo, head, mask]) if (b) transfer.push(b.buffer);
+	const { pdf } = await inWorker({
+		print: {
+			make: job.make,
+			photo: photo && photo.buffer,
+			head: head && head.buffer,
+			mask: mask && mask.buffer,
+			font: font.buffer,
+			options: { ...print, text: job.text || '' },
+		},
+	}, transfer);
+	return new Blob([pdf], { type: 'application/pdf' });
+}
+
+/**
+ * form: the page's FormData, which /resolve reads. onStatus(text) hears
+ * progress. print: the choices for something printed on paper.
+ * Resolves to a Blob holding a binary STL, or a PDF for stickers, a towel
+ * or a tote bag.
+ */
+export async function buildInBrowser(form, onStatus, print = {}) {
 	onStatus('Looking up your Mii…');
 	const res = await fetch('/resolve', { method: 'POST', body: form });
 	let job;
@@ -83,6 +134,7 @@ export async function buildInBrowser(form, onStatus) {
 	onStatus('Downloading your Mii…');
 	const here = new URL('./', import.meta.url);
 	const make = job.make || 'figure';
+	if (PRINTS.has(make)) return buildPrint(job, print, onStatus);
 	const flat = FLAT.has(make);
 	const lettered = flat && !!(job.text || '').trim();
 	const [head, mask, body, font] = await Promise.all([
@@ -96,52 +148,33 @@ export async function buildInBrowser(form, onStatus) {
 	const stages = flat ? NEXT_FLAT_STAGE
 		: make === 'bobblehead' ? NEXT_BOBBLE_STAGE
 		: job.split && job.body ? NEXT_SPLIT_STAGE : NEXT_STAGE;
-	const worker = new Worker(new URL('worker.js', import.meta.url), { type: 'module' });
-	try {
-		const stl = await new Promise((resolve, reject) => {
-			worker.onmessage = ({ data }) => {
-				if (data.type === 'log') {
-					const stage = /^\[\s*[\d.]+s\] (.+?): /.exec(data.line);
-					if (stage && stages[stage[1]]) onStatus(stages[stage[1]]);
-				} else if (data.type === 'done') {
-					resolve(data.stl);
-				} else if (data.type === 'error') {
-					reject(new Error(data.message));
-				}
-			};
-			// An uncaught failure in the worker, most likely running out of memory.
-			worker.onerror = (e) => {
-				e.preventDefault();
-				reject(new Error('Your browser ran out of memory building this Mii. Close some other tabs and try again, or try it on a computer.'));
-			};
-			const transfer = [head.buffer, mask.buffer];
-			if (body) transfer.push(body.buffer);
-			if (font) transfer.push(font.buffer);
-			worker.postMessage({
-				head: head.buffer,
-				mask: mask.buffer,
-				body: body ? body.buffer : null,
-				font: font ? font.buffer : null,
-				options: {
-					make,
-					body: flat ? '' : job.body || '',
-					height: job.height,
-					build: job.build,
-					base: job.base !== false,
-					split: make === 'figure' && !!job.split,
-					fit: Number(job.fit) || 0,
-					size: Number(job.size) || 0,
-					square: job.shape === 'square',
-					rim: job.rim !== false,
-					engraved: job.relief === 'engraved',
-					text: lettered ? job.text : '',
-					textBelow: job.text_pos === 'below',
-					border: job.border || 'none',
-				},
-			}, transfer);
-		});
-		return new Blob([stl], { type: 'model/stl' });
-	} finally {
-		worker.terminate();
-	}
+	const transfer = [head.buffer, mask.buffer];
+	if (body) transfer.push(body.buffer);
+	if (font) transfer.push(font.buffer);
+	const { stl } = await inWorker({
+		head: head.buffer,
+		mask: mask.buffer,
+		body: body ? body.buffer : null,
+		font: font ? font.buffer : null,
+		options: {
+			make,
+			body: flat ? '' : job.body || '',
+			height: job.height,
+			build: job.build,
+			base: job.base !== false,
+			split: make === 'figure' && !!job.split,
+			fit: Number(job.fit) || 0,
+			size: Number(job.size) || 0,
+			square: job.shape === 'square',
+			rim: job.rim !== false,
+			engraved: job.relief === 'engraved',
+			text: lettered ? job.text : '',
+			textBelow: job.text_pos === 'below',
+			border: job.border || 'none',
+		},
+	}, transfer, (line) => {
+		const stage = /^\[\s*[\d.]+s\] (.+?): /.exec(line);
+		if (stage && stages[stage[1]]) onStatus(stages[stage[1]]);
+	});
+	return new Blob([stl], { type: 'model/stl' });
 }

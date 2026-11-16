@@ -20,6 +20,8 @@ public:
 	int width() const { return w_; }
 	int height() const { return h_; }
 	int channels() const { return channels_; }
+	/** RGBA8, rows top to bottom. */
+	const std::vector<uint8_t>& pixels() const { return px_; }
 
 	/** Texel at column x and row y counted from the bottom; out of range
 	 *  wraps. */

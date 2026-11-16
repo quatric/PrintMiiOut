@@ -86,3 +86,13 @@ zlib (bundled with assimp): Copyright (C) 1995-2022 Jean-loup Gailly and Mark Ad
 stb_image (https://github.com/nothings/stb) by Sean Barrett: public domain (or MIT, at your choice).
 
 stb_truetype (https://github.com/nothings/stb) v1.26 by Sean Barrett, which reads the font coins and stamps are lettered in: public domain (or MIT, at your choice).
+
+
+Data in labels.json (not compiled into the module)
+
+The label sheet layouts in labels.json come from LibreOffice's label
+database (extras/source/labels/labels.xml, https://github.com/LibreOffice/core,
+Mozilla Public License 2.0) and gLabels' templates
+(https://github.com/jimevins/glabels-qt), and a few from the margins Avery
+publishes for its Presta templates. The list of sheets is the one The Print
+Shop 4 supports. Avery is a trademark of Avery Products Corporation.

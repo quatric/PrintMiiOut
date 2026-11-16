@@ -47,4 +47,13 @@ struct Options {
  *  a bobblehead). Returns a binary STL. Throws std::runtime_error. */
 std::vector<uint8_t> generate(Bytes head, Bytes mask, Bytes body, const Options& options);
 
+/** The Mii's face drawn flat as line art (as coins and stamps carve it),
+ *  across pixels wide: how much ink covers each pixel and how much of the
+ *  head does, 0 to 255, rows top down. */
+struct FlatFace {
+	int width = 0, height = 0;
+	std::vector<uint8_t> ink, head;
+};
+FlatFace drawFlatFace(Bytes head, Bytes mask, int across);
+
 }  // namespace pmo
