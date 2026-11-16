@@ -2,7 +2,7 @@
 //
 //   const core = await createPrintMiiOut();
 //   const result = core.generate(headGlb, maskPng, bodyGlb, {
-//       body: 'f', height: 64, build: 64, base: true, split: false,
+//       body: 'f', height: 64, build: 64, base: true, split: false, fit: 0,
 //       log: (line) => console.log(line)
 //   });
 //   if (result.error) throw new Error(result.error);
@@ -41,6 +41,7 @@ val generate(val head, val mask, val body, val options) {
 		if (options["build"].isNumber()) o.build = options["build"].as<int>();
 		if (!options["base"].isUndefined()) o.base = options["base"].as<bool>();
 		if (!options["split"].isUndefined()) o.split = options["split"].as<bool>();
+		if (options["fit"].isNumber()) o.fit = options["fit"].as<double>();
 		if (options["voxelsPerHead"].isNumber()) o.voxelsPerHead = options["voxelsPerHead"].as<double>();
 		if (options["maxTriangles"].isNumber()) o.maxTriangles = size_t(options["maxTriangles"].as<double>());
 		val log = options["log"];

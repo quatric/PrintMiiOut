@@ -97,6 +97,7 @@ export async function buildInBrowser(form, onStatus) {
 					build: job.build,
 					base: job.base !== false,
 					split: !!job.split,
+					fit: Number(job.fit) || 0,
 				},
 			}, transfer);
 		});

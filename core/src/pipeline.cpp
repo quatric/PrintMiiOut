@@ -198,8 +198,17 @@ Mesh splitFigure(std::vector<Mesh>& headParts, Mesh& body, const Body& skeleton,
                  const std::function<void(const std::string&)>& log, const std::function<void(const char*)>& tick) {
 	char buf[256];
 	const double voxel = unit / o.voxelsPerHead;
-	const PinFit fit;
-	const double clearance = 0.15;  // between pieces that slide past each other
+	// The printer's fit, within reason: from pins that need a mallet to ones
+	// that slip out on a printer that prints holes much too small.
+	const double loosen = std::clamp(o.fit, -0.2, 0.5);
+	PinFit fit;
+	fit.clearance = std::max(0.0, fit.clearance + loosen);
+	const double clearance = std::max(0.05, 0.15 + loosen);  // between pieces that slide past each other
+	if (loosen != 0) {
+		std::snprintf(buf, sizeof buf, "Fit: %.2f %s around pins and between pieces", std::fabs(loosen),
+		              loosen > 0 ? "more room" : "less room");
+		log(buf);
+	}
 	auto joint = [&](const char* name) { return toZUp(skeleton.jointInHeadFrame(name)); };
 	auto tagged = [](int want) { return [want](int t) { return t == want; }; };
 	auto none = [](int, const V3&) { return false; };
@@ -284,7 +293,7 @@ Mesh splitFigure(std::vector<Mesh>& headParts, Mesh& body, const Body& skeleton,
 			Mesh candidate = body, arm;
 			std::vector<Outline> outlines;
 			if (!cutOff(candidate, shoulder + axis * at, axis, tagged(tag), leak, arm, outlines) || outlines.empty()) continue;
-			PinSpot spot = pinSpots(outlines[0], axis, 1.6, 5.0, false)[0];
+			PinSpot spot = pinSpots(outlines[0], axis, 1.6, 5.0, false, fit.clearance)[0];
 			BVH inTorso(candidate), inArm(arm);
 			// The thickest pin both sides take deep enough; failing that, how
 			// close the thinnest comes.
@@ -392,7 +401,8 @@ Mesh splitFigure(std::vector<Mesh>& headParts, Mesh& body, const Body& skeleton,
 		for (const Outline& ol : j.outlines)
 			// Legs coming out as one (a pelvis) take two pins, so they cannot
 			// turn, even on a tiny Mii.
-			for (const PinSpot& sp : pinSpots(ol, j.normal, 2.0, 5.0, ji == kHips && j.outlines.size() == 1)) {
+			for (const PinSpot& sp : pinSpots(ol, j.normal, 2.0, 5.0, ji == kHips && j.outlines.size() == 1,
+			                                  fit.clearance)) {
 				double bestScore = -1, bestR = 0, bestOn = 0, bestOff = 0;
 				V3 bestAxis = j.normal;
 				// Hips carry the figure: no thinner than 2 mm. A thin neck or
@@ -562,8 +572,8 @@ Mesh splitFigure(std::vector<Mesh>& headParts, Mesh& body, const Body& skeleton,
 			double diameter = j.spots[s].diameter;
 			double length = j.on[s].depth + j.off[s].depth + j.gap - 2 * fit.endGap;
 			out.push_back(makePin(diameter, length, fit));
-			std::snprintf(buf, sizeof buf, "Pin for the %s: %.2f mm thick, %.2f long (sockets %.2f and %.2f deep)", j.name,
-			              diameter, length, j.on[s].depth, j.off[s].depth);
+			std::snprintf(buf, sizeof buf, "Pin for the %s: %.2f mm thick, %.2f long (sockets %.2f across, %.2f and %.2f deep)",
+			              j.name, diameter, length, 2 * j.on[s].radius, j.on[s].depth, j.off[s].depth);
 			log(buf);
 		}
 	if (o.assembled) {

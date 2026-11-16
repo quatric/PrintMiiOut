@@ -5,6 +5,7 @@ only reads the form (/resolve: decrypts QR codes, looks up NNIDs, picks the
 body); the browser fetches the Mii from mii-unsecure.ariankordi.net itself
 and makes the model with the WebAssembly core (core/, static/client/).
 """
+import math
 import os
 import re
 
@@ -205,7 +206,7 @@ LLMS_TXT = f"""# PrintMiiOut (printmiiout.com)
 
 - [The tool]({SITE_URL}/): enter a Nintendo Network ID (NNID) or Pretendo Network ID (PNID), upload a binary .mii / .ffsd file, or upload a Mii QR code image. Building usually takes under half a minute and needs up to 1 GB of memory.
 - Glasses print as a flat frame that rests on the face, with temple arms holding it to the head.
-- The figure prints as one piece by default, or as snap-together parts: the head, torso, arms and legs (with or without the base) print separately and press together on pins with crush ribs, like building bricks.
+- The figure prints as one piece by default, or as snap-together parts: the head, torso, arms and legs (with or without the base) print separately and press together on pins with crush ribs, like building bricks. A "Pin fit" slider loosens or tightens every pin for the visitor's printer.
 - The body follows the Mii's own height and build, scaled bone by bone as Nintendo's editor scales it, with arms and legs held thick enough to print. An "Average" option uses the middle height and build instead.
 
 ## Source
@@ -233,9 +234,10 @@ def llms_txt():
     return _text(LLMS_TXT, "text/plain")
 
 
-def _parse_form() -> tuple[tuple[dict, str, str, bool, bool] | None, str | None]:
+def _parse_form() -> tuple[tuple[dict, str, str, bool, bool, float] | None, str | None]:
     """The Mii API params, body type, proportions, whether to print the
-    figure in snap-together pieces and whether to stand it on a base, as the
+    figure in snap-together pieces, whether to stand it on a base and how
+    much more room (or less) to give its pins for the printer, as the
     /resolve form asks for them, or an error message for the user."""
     input_type = request.form.get("input_type", "nnid")
     body_type   = request.form.get("body_type", "auto")
@@ -246,6 +248,12 @@ def _parse_form() -> tuple[tuple[dict, str, str, bool, bool] | None, str | None]
         proportions = "mii"
     split = request.form.get("pieces", "whole") == "split"
     base = request.form.get("base", "on") != "off"
+    try:
+        fit = float(request.form.get("fit", "0"))
+    except ValueError:
+        fit = 0.0
+    # Millimetres per side, as far as the page's slider goes.
+    fit = round(min(max(fit, -0.1), 0.2), 2) if math.isfinite(fit) else 0.0
 
     # Build the API params based on input type
     api_params: dict = {}
@@ -319,7 +327,7 @@ def _parse_form() -> tuple[tuple[dict, str, str, bool, bool] | None, str | None]
         expression = "normal"
     api_params["expression"] = expression
 
-    return (api_params, body_type, proportions, split, base), None
+    return (api_params, body_type, proportions, split, base, fit), None
 
 
 @app.route("/resolve", methods=["POST"])
@@ -330,7 +338,7 @@ def resolve():
     form, error = _parse_form()
     if error:
         return jsonify(error=error), 400
-    api_params, body_type, proportions, split, base = form
+    api_params, body_type, proportions, split, base, fit = form
     body_type, height, build = _body_for(api_params, body_type, proportions)
     return jsonify(
         glb=_mii_glb_url(api_params),
@@ -340,6 +348,7 @@ def resolve():
         build=build,
         split=split,
         base=base,
+        fit=fit,
     )
 
 

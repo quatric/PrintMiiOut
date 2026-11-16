@@ -52,11 +52,13 @@ struct PinSpot {
 
 /** One pin for a roughly round cross-section, two side by side for a long
  *  one (or, with preferTwo, whenever two fit, however thin), each as thick
- *  as the walls around it allow. */
+ *  as the walls around its socket (clearance wider each side) allow. */
 std::vector<PinSpot> pinSpots(const Outline& outline, const V3& normal, double minDiameter, double maxDiameter,
-                              bool preferTwo);
+                              bool preferTwo, double clearance);
 
-/** Pin and socket sizes, in model units (millimetres at 100% scale). */
+/** Pin and socket sizes, in model units (millimetres at 100% scale). The
+ *  ribs stand 0.12 proud of the socket wall, so the pin presses in and holds;
+ *  Options::fit widens or narrows every socket from there. */
 struct PinFit {
 	double clearance = 0.1;  // between the pin's body and its socket, each side
 	double rib = 0.22;       // how far the crush ribs stand off the body

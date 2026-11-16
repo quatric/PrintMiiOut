@@ -259,6 +259,20 @@
     .options { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     .options .field-wide { grid-column: 1 / -1; margin-top: 0; }
     .options .pieces-note { margin-top: -12px; }
+    .fit-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .fit-head output { font-weight: 700; }
+    input[type="range"] { -webkit-appearance: none; appearance: none; display: block; width: calc(100% - 6px); height: 26px; margin: 2px 3px 0; background: transparent; cursor: pointer; }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 8px; background: repeating-linear-gradient(90deg, var(--ink) 0 3px, transparent 3px calc((100% - 3px) / 6)) var(--card);
+      box-shadow: 0 0 0 3px var(--ink);
+    }
+    input[type="range"]::-moz-range-track {
+      height: 8px; background: repeating-linear-gradient(90deg, var(--ink) 0 3px, transparent 3px calc((100% - 3px) / 6)) var(--card);
+      box-shadow: 0 0 0 3px var(--ink);
+    }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 24px; margin-top: -8px; border: none; border-radius: 0; background: var(--leaf); box-shadow: 0 0 0 3px var(--ink); }
+    input[type="range"]::-moz-range-thumb { width: 16px; height: 24px; border: none; border-radius: 0; background: var(--leaf); box-shadow: 0 0 0 3px var(--ink); }
+    .fit-ends { display: flex; justify-content: space-between; font-size: 0.84rem; color: var(--soft); margin-top: 6px; }
     .gender-row { display: flex; gap: 12px; flex-wrap: wrap; padding: 3px; }
 
     .error-box {
@@ -574,6 +588,15 @@
             </div>
           </div>
           <div class="field-note field-wide pieces-note" id="pieces-note" hidden>The head, torso, arms and legs print on their own, each standing up, with pins that press in firmly like building bricks. Print at 100% scale so the pins fit.</div>
+          <div class="field field-wide" id="fit-field" hidden>
+            <div class="fit-head">
+              <label class="label" for="fit">Pin fit</label>
+              <output id="fit-value" for="fit">Standard</output>
+            </div>
+            <input type="range" id="fit" min="-0.1" max="0.2" step="0.05" value="0" aria-describedby="fit-note">
+            <div class="fit-ends" aria-hidden="true"><span>Tighter</span><span>Looser</span></div>
+            <div class="field-note" id="fit-note">Pins too hard to press in? Go looser. Slipping out? Go tighter. Each step gives every pin and the neck 0.05&nbsp;mm more or less room all round. Remembered for your next Mii.</div>
+          </div>
         </div>
       </article>
 
@@ -702,6 +725,7 @@
       if (btn.dataset.pieces) {
         printPieces = btn.dataset.pieces;
         document.getElementById('pieces-note').hidden = printPieces !== 'split';
+        document.getElementById('fit-field').hidden = printPieces !== 'split';
       }
       btn.closest('.gender-row').querySelectorAll('.gender-btn').forEach(b => {
         b.classList.toggle('selected', b === btn);
@@ -793,6 +817,23 @@
     }
   });
 
+  // ── Pin fit, which depends on the printer, so it is kept for next time ────
+  const fitInput = document.getElementById('fit');
+  const fitValue = document.getElementById('fit-value');
+  function showFit() {
+    const v = Math.round(parseFloat(fitInput.value) * 100) / 100;
+    fitValue.textContent = v === 0 ? 'Standard' : `${Math.abs(v).toFixed(2)} mm ${v > 0 ? 'looser' : 'tighter'}`;
+  }
+  try {
+    const saved = localStorage.getItem('printmiiout-fit');
+    if (saved !== null && Number.isFinite(parseFloat(saved))) fitInput.value = saved;
+  } catch (_) {}
+  showFit();
+  fitInput.addEventListener('input', () => {
+    showFit();
+    try { localStorage.setItem('printmiiout-fit', fitInput.value); } catch (_) {}
+  });
+
   // ── Submit ────────────────────────────────────────────────────────────────
   const btnSubmit   = document.getElementById('btn-submit');
   const errorBox    = document.getElementById('error-box');
@@ -826,6 +867,7 @@
     fd.append('proportions', bodyProportions);
     fd.append('pieces', printPieces);
     fd.append('base', standBase);
+    fd.append('fit', fitInput.value);
     fd.append('expression', document.getElementById('expression').value);
 
     if (activeTab === 'nnid') {

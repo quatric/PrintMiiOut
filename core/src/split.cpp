@@ -485,7 +485,7 @@ P2 widestPoint(const std::vector<P2>& poly, const P2& split, const P2& axis, int
 }  // namespace
 
 std::vector<PinSpot> pinSpots(const Outline& outline, const V3& n0, double minDiameter, double maxDiameter,
-                              bool preferTwo) {
+                              bool preferTwo, double clearance) {
 	std::vector<PinSpot> out;
 	if (outline.size() < 3) return out;
 	const V3 normal = normalized(n0);
@@ -497,7 +497,6 @@ std::vector<PinSpot> pinSpots(const Outline& outline, const V3& n0, double minDi
 	auto toModel = [&](const P2& p) { return origin + e1 * p.x + e2 * p.y; };
 	// A pin as thick as leaves a wall around it about a third of the room.
 	auto diameterFor = [&](double room) {
-		const double clearance = 0.1;
 		double wall = std::clamp(0.35 * room, 0.8, 2.0);
 		return std::clamp(2 * (room - wall - clearance), minDiameter, maxDiameter);
 	};
@@ -533,7 +532,7 @@ std::vector<PinSpot> pinSpots(const Outline& outline, const V3& n0, double minDi
 		double ra = 0, rb = 0;
 		P2 pa = widestPoint(poly, c, major, 1, ra), pb = widestPoint(poly, c, major, -1, rb);
 		double room = std::min(ra, rb);
-		bool fits = 2 * (room - std::clamp(0.35 * room, 0.8, 2.0) - 0.1) >= minDiameter;
+		bool fits = 2 * (room - std::clamp(0.35 * room, 0.8, 2.0) - clearance) >= minDiameter;
 		if (fits) {
 			out.push_back({toModel(pa), diameterFor(room)});
 			out.push_back({toModel(pb), diameterFor(room)});

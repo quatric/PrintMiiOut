@@ -2,7 +2,11 @@
 // browser.
 //
 //   printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb miiBodyM.glb]
-//                    [--height N] [--build N] [--no-base] [--split] [--assembled] [--voxels 240] [--max-tris 600000]
+//                    [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM]
+//                    [--voxels 240] [--max-tris 600000]
+//
+// --fit gives pins and sliding pieces that many millimetres more room per
+// side (less when negative), for a printer whose holes come out too tight.
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -52,6 +56,8 @@ int main(int argc, char** argv) {
 			o.split = true;
 		else if (a == "--assembled")
 			o.split = o.assembled = true;
+		else if (a == "--fit")
+			o.fit = std::atof(next().c_str());
 		else if (a == "--voxels")
 			o.voxelsPerHead = std::atof(next().c_str());
 		else if (a == "--max-tris")
@@ -62,7 +68,8 @@ int main(int argc, char** argv) {
 	if (pos.size() != 2) {
 		std::fprintf(stderr,
 		             "usage: printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb body.glb]\n"
-		             "       [--height N] [--build N] [--no-base] [--split] [--assembled] [--voxels 240] [--max-tris 600000]\n");
+		             "       [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM]\n"
+		             "       [--voxels 240] [--max-tris 600000]\n");
 		return 1;
 	}
 	auto head = readFile(pos[0]);
