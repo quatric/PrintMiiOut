@@ -1,14 +1,14 @@
 # PrintMiiOut
 
-PrintMiiOut converts Nintendo Mii characters into 3D-printable STL models. Enter an NNID/PNID, upload a binary file or QR code, and export a ready-to-print 3D model.
+PrintMiiOut converts Nintendo Mii characters into 3D-printable STL models. Enter an NNID/PNID, upload a binary file or QR code, and export a ready-to-print 3D model, built right in your browser.
 
 ## Features
 - **Multiple Input Sources**: Fetch Miis by Nintendo Network ID (NNID), Pretendo Network ID (PNID), binary `.mii` / `.ffsd` files, or QR code images.
-- **Blender 3D Pipeline**: Processes GLB meshes with smoothing modifiers and fuses everything into one watertight solid for 3D printing.
+- **Built in Your Browser**: The model pipeline is C++ ([core/](core/README.md)) compiled to WebAssembly, with [assimp](https://github.com/assimp/assimp) reading the Mii and writing the STL. The browser fetches the Mii straight from the Mii API and builds the model itself, smoothing it and fusing everything into one watertight solid; the server only reads the form (decrypting QR codes and looking up NNIDs).
 - **True Body Proportions**: The body follows the Mii's own height and build, scaled bone by bone the way Nintendo's editor scales it (the same rules as [FFL.js](https://github.com/ariankordi/FFL.js)). Arms, legs, wrists and ankles are held at a printable minimum thickness, so a very short, slim Mii keeps its look without snapping. An "Average" option uses the middle height and build instead.
 - **Printable Glasses**: Glasses become a flat frame that rests on the face, with temple arms holding it to the head.
-- **Snap-Together Parts**: Optionally, the head, torso, arms and legs (with or without the base) print as separate pieces, each standing as it stands in the figure, and press together on separate pins with crush ribs, like building bricks. The arms come off square to the upper arm where it comes free of the body, the neck stays on the torso and fits into a hole in the head (as a minifigure's does), and the legs come off just below the shirt or skirt, on two pins so they cannot turn. Each pin is as thick as the cut and both pieces allow and goes in as deep as holds it firmly, and the torso and legs keep clear of the way the head and arms slide in. Print at 100% scale so the pins fit (`printmiiout.py ... --split`, with `--assembled` to check the fit with every piece in place).
-- **Build in Your Browser (beta)**: The same pipeline in C++ ([core/](core/README.md)), compiled to WebAssembly with [assimp](https://github.com/assimp/assimp) reading the Mii and writing the STL. The browser fetches the Mii straight from the Mii API and builds the model itself, so it never waits in the server's queue.
+- **Snap-Together Parts**: Optionally, the head, torso, arms and legs (with or without the base) print as separate pieces, each standing as it stands in the figure, and press together on separate pins with crush ribs, like building bricks. The arms come off square to the upper arm where it comes free of the body, the neck stays on the torso and fits into a hole in the head (as a minifigure's does), and the legs come off just below the shirt or skirt, on two pins so they cannot turn. Each pin is as thick as the cut and both pieces allow and goes in as deep as holds it firmly, and the torso and legs keep clear of the way the head and arms slide in. A tiny Mii's legs still get two pins, and its neck pin goes at least 6 mm into the torso and the head. Print at 100% scale so the pins fit (`--split` on either command line, with `--assembled` to check the fit with every piece in place).
+- **Blender Version**: `printmiiout.py` is the same pipeline in Blender, which the C++ core was ported from and is checked against. It runs from the command line (`blender -b --python printmiiout.py -- mii_head.glb f`); the site does not use it.
 - **Web Interface**: Clean, responsive web UI built with Flask and Vanilla CSS.
 
 ## Checking the body against FFL.js
@@ -26,7 +26,7 @@ To check the body alone: `python miibody.py miiBodyF_wiiu_plain.glb body.stl --h
 
 ## Building in the browser
 
-`core/` is the pipeline without Blender, in C++: assimp imports the head and body GLBs and exports the STL, and the rest (smoothing, the face emboss, glasses, the body, fusing into one solid, simplifying) is our own code. It builds a command line tool for checking it against Blender and a WebAssembly module that the site runs in a Web Worker. The built module is checked in under `static/client/`, so the site needs no build step; see [core/README.md](core/README.md) to rebuild it.
+`core/` is the pipeline without Blender, in C++: assimp imports the head and body GLBs and exports the STL, and the rest (smoothing, the face emboss, glasses, the body, fusing into one solid, simplifying, the snap-together parts) is our own code. It builds a command line tool for checking it against Blender and the WebAssembly module that the site runs in a Web Worker to build every model. The built module is checked in under `static/client/`, so the site needs no build step; see [core/README.md](core/README.md) to rebuild it.
 
 The bodies the browser uses (`static/client/miiBody{M,F}.glb`) are the game's bodies re-saved without mesh quantization, which assimp cannot read, and with the standing pose baked in:
 
@@ -38,7 +38,7 @@ python tools/bake_body.py miiBodyF_wiiu_plain.glb static/client/miiBodyF.glb
 To compare two STLs side by side (say Blender's and the core's), `tools/reference` takes `--a blender.stl --b core.stl`, with `--face` or `--box x0,y0,z0,x1,y1,z1` to zoom in.
 
 ## Credits
-- **3D processing**: Powered by Blender, and in the browser by [assimp](https://github.com/assimp/assimp) and [stb_image](https://github.com/nothings/stb).
+- **3D processing**: In the browser by [assimp](https://github.com/assimp/assimp) and [stb_image](https://github.com/nothings/stb); the Blender version by Blender.
 - **Body scaling**: Rules from [FFL.js](https://github.com/ariankordi/FFL.js) by Arian Kordi, after Nintendo's own editor body.
 - **Display font**: [Nintendo U Version 3](https://www.deviantart.com/dledeviant/art/Nintendo-U-Version-3-595000916) by dledeviant, free for non-commercial use.
 - **Background tiles**: from [mii-unsecure](https://mii-unsecure.ariankordi.net/) by Arian Kordi, used with permission.

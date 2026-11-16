@@ -22,6 +22,7 @@ PIN_CLEARANCE = 0.1     # between a pin's body and its socket, each side
 PIN_RIB = 0.22          # how far the crush ribs stand off the pin
 PIN_END_GAP = 0.25      # left free at the bottom of each socket
 SLIDE_CLEARANCE = 0.15  # between pieces that slide past each other
+NECK_SOCKET_DEPTH = 6.0  # how deep the neck's pin goes into the torso and head, at least
 
 
 def wall_for(r):
@@ -342,8 +343,9 @@ def _widest_point(poly, split, axis, side):
 
 def pin_spots(outline, normal, min_d, max_d, prefer_two):
     """Where pins go through a cut [(centre, diameter)]: one for a roughly
-    round cross-section, two side by side for a long one (or whenever there
-    is room, with prefer_two), each as thick as the walls around it allow."""
+    round cross-section, two side by side for a long one (or, with
+    prefer_two, whenever two fit, however thin), each as thick as the walls
+    around it allow."""
     if len(outline) < 3:
         return []
     normal = unit(normal)
@@ -374,7 +376,7 @@ def pin_spots(outline, normal, min_d, max_d, prefer_two):
         pb, rb = _widest_point(poly, c, major, -1)
         room = min(ra, rb)
         fits = 2 * (room - min(max(0.35 * room, 0.8), 2.0) - PIN_CLEARANCE) >= min_d
-        if fits and (not prefer_two or diameter_for(room) >= 0.75 * diameter_for(radius)):
+        if fits:
             return [(to_model(pa), diameter_for(room)), (to_model(pb), diameter_for(room))]
     return [(to_model(one), diameter_for(radius))]
 

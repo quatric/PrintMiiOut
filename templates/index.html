@@ -574,14 +574,6 @@
             </div>
           </div>
           <div class="field-note field-wide pieces-note" id="pieces-note" hidden>The head, torso, arms and legs print on their own, each standing up, with pins that press in firmly like building bricks. Print at 100% scale so the pins fit.</div>
-          <div class="field field-wide" id="where-field" hidden>
-            <span class="label" id="where-label">Build on</span>
-            <div class="gender-row" role="group" aria-labelledby="where-label">
-              <button class="gender-btn selected" data-where="server"  type="button" aria-pressed="true">Our server</button>
-              <button class="gender-btn"          data-where="browser" type="button" aria-pressed="false">Your browser (beta)</button>
-            </div>
-            <div class="field-note">Your browser builds the same model itself, with no queue. It needs a few seconds and up to 1&nbsp;GB of memory.</div>
-          </div>
         </div>
       </article>
 
@@ -592,7 +584,7 @@
           <img src="{{ url_for('static', filename='yeah.webp') }}" alt="" width="39" height="36">
           Yeah! Print it
         </button>
-        <p class="yeah-note" id="yeah-note">Blender usually takes under a minute. You can doodle while it works.</p>
+        <p class="yeah-note" id="yeah-note">Your browser builds it in under half a minute, with up to 1&nbsp;GB of memory. You can doodle while it works.</p>
       </div>
     </form>
 
@@ -602,7 +594,7 @@
         <span class="avatar"><img class="avatar-look" src="{{ url_for('static', filename='mii-face.webp') }}" alt="" width="67" height="67"></span>
         <div><p class="who">PrintMiiOut</p><p class="when">working…</p></div>
       </div>
-      <p class="say">Printing takes a minute. Draw something while you wait!</p>
+      <p class="say">Building takes half a minute. Draw something while you wait!</p>
       <div class="doodle-wrap">
         <canvas class="doodle" id="doodle" width="320" height="120" aria-label="Doodle canvas, 320 by 120 pixels"></canvas>
       </div>
@@ -639,13 +631,13 @@
   <aside class="side">
     <section class="px">
       <h2>About</h2>
-      <p>PrintMiiOut fetches your Mii, builds a head and body in Blender, and hands you an STL for your slicer.</p>
+      <p>PrintMiiOut fetches your Mii, builds a head and body right in your browser, and hands you an STL for your slicer.</p>
       <p>You can bring a Mii from a Nintendo Network ID (Wii U), a Pretendo Network ID, a binary Mii file (.mii or .ffsd), or a Mii QR code image. Glasses print as a flat frame with temple arms, and the figure can print as snap-together parts.</p>
       <p>Printer, filament and patience not included.</p>
     </section>
     <section class="px">
       <h2>Credits</h2>
-      <p>3D processing via Blender, or in your browser with <a href="https://github.com/assimp/assimp" target="_blank" rel="noopener">assimp</a> and WebAssembly.</p>
+      <p>3D processing in your browser with <a href="https://github.com/assimp/assimp" target="_blank" rel="noopener">assimp</a> and WebAssembly.</p>
       <p>Mii rendering powered by <a href="https://mii-unsecure.ariankordi.net/" target="_blank" rel="noopener">mii-unsecure.ariankordi.net</a> by Arian Kordi.</p>
       <p><a href="https://github.com/quatric/PrintMiiOut/" target="_blank" rel="noopener">Source Code</a></p>
     </section>
@@ -702,9 +694,6 @@
   let bodyProportions = 'mii';
   let printPieces = 'whole';
   let standBase = 'on';
-  let buildWhere = 'server';
-  // Building in the browser needs WebAssembly and module workers.
-  document.getElementById('where-field').hidden = !(typeof WebAssembly === 'object' && 'Worker' in window);
   document.querySelectorAll('.gender-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (btn.dataset.gender) bodyGender = btn.dataset.gender;
@@ -713,12 +702,6 @@
       if (btn.dataset.pieces) {
         printPieces = btn.dataset.pieces;
         document.getElementById('pieces-note').hidden = printPieces !== 'split';
-      }
-      if (btn.dataset.where) {
-        buildWhere = btn.dataset.where;
-        document.getElementById('yeah-note').textContent = buildWhere === 'browser'
-          ? 'Your browser usually takes under half a minute. You can doodle while it works.'
-          : 'Blender usually takes under a minute. You can doodle while it works.';
       }
       btn.closest('.gender-row').querySelectorAll('.gender-btn').forEach(b => {
         b.classList.toggle('selected', b === btn);
@@ -815,9 +798,14 @@
   const errorBox    = document.getElementById('error-box');
   const statusText  = document.getElementById('status-text');
   const downloadLink= document.getElementById('download-link');
-  let pollTimer = null;
-  let polledJob = null;
-  let builtUrl = null;  // the last STL built in the browser
+  let builtUrl = null;  // the last STL built
+  // The model is built here in the browser, which needs WebAssembly and workers.
+  const canBuild = typeof WebAssembly === 'object' && 'Worker' in window;
+  if (!canBuild) {
+    errorBox.textContent = 'This browser cannot build models: it needs WebAssembly. Try a recent Chrome, Firefox, Safari or Edge.';
+    errorBox.hidden = false;
+    btnSubmit.disabled = true;
+  }
 
   function showError(msg) {
     errorBox.textContent = msg;
@@ -828,7 +816,7 @@
   function hideError() { errorBox.hidden = true; }
 
   async function handleGenerate() {
-    if (btnSubmit.disabled) return;
+    if (btnSubmit.disabled || !canBuild) return;
     hideError();
     btnSubmit.disabled = true;
 
@@ -873,43 +861,21 @@
       }
     }
 
-    statusText.textContent = 'Fetching Mii data from the API…';
+    statusText.textContent = 'Looking up your Mii…';
     setStage('progress');
 
-    if (buildWhere === 'browser') {
-      try {
-        const { buildInBrowser } = await import("{{ url_for('static', filename='client/browser-build.js') }}");
-        const stl = await buildInBrowser(fd, text => { statusText.textContent = text; });
-        if (builtUrl) URL.revokeObjectURL(builtUrl);
-        builtUrl = URL.createObjectURL(stl);
-        downloadLink.href = builtUrl;
-        downloadLink.download = 'printmiiout.stl';
-        setStage('result');
-      } catch (err) {
-        setStage('input');
-        showError(err.message);
-      }
-      return;
-    }
-
-    let jobId;
     try {
-      const res = await fetch('/submit', { method: 'POST', body: fd });
-      let json;
-      try {
-        json = await res.json();
-      } catch (_) {
-        const text = await res.text();
-        throw new Error(`Server error (${res.status}): ${text.replace(/<[^>]*>?/gm, ' ').slice(0, 150)}`);
-      }
-      if (!res.ok) throw new Error((json && json.error) || 'Server error.');
-      jobId = json.job_id;
+      const { buildInBrowser } = await import("{{ url_for('static', filename='client/browser-build.js') }}");
+      const stl = await buildInBrowser(fd, text => { statusText.textContent = text; });
+      if (builtUrl) URL.revokeObjectURL(builtUrl);
+      builtUrl = URL.createObjectURL(stl);
+      downloadLink.href = builtUrl;
+      downloadLink.download = 'printmiiout.stl';
+      setStage('result');
     } catch (err) {
       setStage('input');
-      return showError(err.message);
+      showError(err.message);
     }
-
-    pollStatus(jobId);
   }
 
   inputCard.addEventListener('submit', (e) => {
@@ -929,45 +895,8 @@
     }
   });
 
-  function pollStatus(jobId) {
-    statusText.textContent = 'Running Blender pipeline… (usually done in under a minute)';
-    const started = Date.now();
-    polledJob = jobId;
-    const check = async () => {
-      if (polledJob !== jobId) return;
-      try {
-        const res  = await fetch(`/status/${jobId}`);
-        const json = await res.json();
-        if (polledJob !== jobId) return;
-
-        if (json.status === 'done') {
-          polledJob = null;
-          downloadLink.removeAttribute('download');
-          downloadLink.href = `/download/${jobId}`;
-          setStage('result');
-          return;
-
-        } else if (json.status === 'error') {
-          polledJob = null;
-          setStage('input');
-          showError('Blender error: ' + (json.error || 'Unknown error.'));
-          btnSubmit.disabled = false;
-          return;
-        }
-        // still 'queued' or 'running' - keep polling
-      } catch (e) {
-        // network hiccup, keep going
-      }
-      // A model takes seconds, so check often at first and ease off if it queues.
-      pollTimer = setTimeout(check, Date.now() - started < 20000 ? 500 : 2000);
-    };
-    pollTimer = setTimeout(check, 500);
-  }
-
   // ── Start over ────────────────────────────────────────────────────────────
   document.getElementById('btn-again').addEventListener('click', () => {
-    if (pollTimer) clearTimeout(pollTimer);
-    polledJob = null;
     if (builtUrl) {
       URL.revokeObjectURL(builtUrl);
       builtUrl = null;

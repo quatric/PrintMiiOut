@@ -1077,7 +1077,8 @@ def _make_pieces(unit, rig, with_base=True, assembled=False):
     for ji, j in enumerate(J):
         on, off = solids[TORSO], solids[moving[ji]]
         for outline in j.outlines:
-            # Legs coming out as one (a pelvis) take two pins, so they cannot turn.
+            # Legs coming out as one (a pelvis) take two pins, so they cannot
+            # turn, even on a tiny Mii.
             for centre, diameter in ms.pin_spots(outline, j.normal, 2.0, 5.0, ji == HIPS and len(j.outlines) == 1):
                 # Hips carry the figure: no thinner than 2 mm. A thin neck or
                 # arm may go down to 1.6 mm to keep a wall around its socket.
@@ -1095,6 +1096,12 @@ def _make_pieces(unit, rig, with_base=True, assembled=False):
                         break  # the thickest that goes deep enough
                     r -= 0.1
                 _score, r, d_on, d_off = best
+                if ji == NECK:
+                    # A thin neck pin goes deeper than its thickness asks, as far
+                    # as there is room, so a tiny Mii keeps its head on.
+                    deep = max(ms.good_depth(r), ms.NECK_SOCKET_DEPTH)
+                    d_on = room(on, centre, -j.normal, r, deep)
+                    d_off = room(off, centre + j.normal * j.gap, j.normal, r, deep)
                 j.spots.append([centre, 2 * (r - ms.PIN_CLEARANCE)])
                 j.on.append(Socket(centre, -j.normal, r, max(d_on, 1.5)))
                 j.off.append(Socket(centre + j.normal * j.gap, j.normal, r, max(d_off, 1.5)))

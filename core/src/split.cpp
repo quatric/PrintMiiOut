@@ -534,7 +534,7 @@ std::vector<PinSpot> pinSpots(const Outline& outline, const V3& n0, double minDi
 		P2 pa = widestPoint(poly, c, major, 1, ra), pb = widestPoint(poly, c, major, -1, rb);
 		double room = std::min(ra, rb);
 		bool fits = 2 * (room - std::clamp(0.35 * room, 0.8, 2.0) - 0.1) >= minDiameter;
-		if (fits && (!preferTwo || diameterFor(room) >= 0.75 * diameterFor(radius))) {
+		if (fits) {
 			out.push_back({toModel(pa), diameterFor(room)});
 			out.push_back({toModel(pb), diameterFor(room)});
 			return out;

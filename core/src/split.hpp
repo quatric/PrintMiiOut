@@ -51,8 +51,8 @@ struct PinSpot {
 };
 
 /** One pin for a roughly round cross-section, two side by side for a long
- *  one (or whenever there is room, with preferTwo), each as thick as the
- *  walls around it allow. */
+ *  one (or, with preferTwo, whenever two fit, however thin), each as thick
+ *  as the walls around it allow. */
 std::vector<PinSpot> pinSpots(const Outline& outline, const V3& normal, double minDiameter, double maxDiameter,
                               bool preferTwo);
 

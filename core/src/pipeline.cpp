@@ -34,6 +34,9 @@ const double kBodyThicken = 0.006;
 const double kMinLimbRadius = 0.03;
 const double kBodySeamWeld = 0.003;
 const double kMinIsland = 0.01;
+// How deep the neck's pin goes into the torso and into the head, at least
+// (millimetres at 100% scale).
+const double kNeckSocketDepth = 6.0;
 
 struct Part {
 	std::string name;
@@ -387,7 +390,8 @@ Mesh splitFigure(std::vector<Mesh>& headParts, Mesh& body, const Body& skeleton,
 		const Voxels &on = grids[kTorso], &off = grids[moving[ji]];
 		std::vector<V3> axes{j.normal};
 		for (const Outline& ol : j.outlines)
-			// Legs coming out as one (a pelvis) take two pins, so they cannot turn.
+			// Legs coming out as one (a pelvis) take two pins, so they cannot
+			// turn, even on a tiny Mii.
 			for (const PinSpot& sp : pinSpots(ol, j.normal, 2.0, 5.0, ji == kHips && j.outlines.size() == 1)) {
 				double bestScore = -1, bestR = 0, bestOn = 0, bestOff = 0;
 				V3 bestAxis = j.normal;
@@ -409,6 +413,14 @@ Mesh splitFigure(std::vector<Mesh>& headParts, Mesh& body, const Body& skeleton,
 						}
 					}
 					if (bestScore >= 1) break;  // the thickest that goes deep enough
+				}
+				if (ji == kNeck) {
+					// A thin neck pin goes deeper than its thickness asks, as far
+					// as there is room (the head is big and the neck runs on down
+					// into the chest), so a tiny Mii keeps its head on.
+					const double deep = std::max(Socket::goodDepth(bestR), kNeckSocketDepth);
+					bestOn = on.room(sp.centre, -bestAxis, bestR, deep, j.normal);
+					bestOff = off.room(sp.centre + j.normal * j.gap, bestAxis, bestR, deep, -j.normal);
 				}
 				j.spots.push_back({sp.centre, 2 * (bestR - fit.clearance)});
 				for (int side = 0; side < 2; side++) {

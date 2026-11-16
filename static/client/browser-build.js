@@ -1,7 +1,7 @@
-// Builds the STL in the browser instead of on the server. The server only
-// reads the form (/resolve: decrypts QR codes, looks up NNIDs, picks the
-// body); the Mii itself comes straight from the Mii API, and the model is
-// made by the WebAssembly core in a worker.
+// Builds the STL in the browser, the only place PrintMiiOut builds it. The
+// server only reads the form (/resolve: decrypts QR codes, looks up NNIDs,
+// picks the body); the Mii itself comes straight from the Mii API, and the
+// model is made by the WebAssembly core in a worker.
 
 // The core's stages, as it reports them, and what to tell the user next.
 const NEXT_STAGE = {
@@ -43,7 +43,7 @@ async function fetchBytes(url, what) {
 }
 
 /**
- * form: the same FormData /submit takes. onStatus(text) hears progress.
+ * form: the page's FormData, which /resolve reads. onStatus(text) hears progress.
  * Resolves to a Blob holding a binary STL.
  */
 export async function buildInBrowser(form, onStatus) {
@@ -83,7 +83,7 @@ export async function buildInBrowser(form, onStatus) {
 			// An uncaught failure in the worker, most likely running out of memory.
 			worker.onerror = (e) => {
 				e.preventDefault();
-				reject(new Error('Your browser ran out of room building this Mii. Try the server instead.'));
+				reject(new Error('Your browser ran out of memory building this Mii. Close some other tabs and try again, or try it on a computer.'));
 			};
 			const transfer = [head.buffer, mask.buffer];
 			if (body) transfer.push(body.buffer);
