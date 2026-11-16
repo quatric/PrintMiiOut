@@ -660,8 +660,9 @@
     </section>
     <section class="px">
       <h2>Credits</h2>
+      <p>by quatric &amp; cmyksoda</p>
       <p>3D processing in your browser with <a href="https://github.com/assimp/assimp" target="_blank" rel="noopener">assimp</a> and WebAssembly.</p>
-      <p>Mii rendering powered by <a href="https://mii-unsecure.ariankordi.net/" target="_blank" rel="noopener">mii-unsecure.ariankordi.net</a> by Arian Kordi.</p>
+      <p>Mii rendering powered by <a href="https://mii-unsecure.ariankordi.net/" target="_blank" rel="noopener">mii-unsecure.ariankordi.net</a> by Arian Kordi, special thanks for consulting on this project.</p>
       <p><a href="https://github.com/quatric/PrintMiiOut/" target="_blank" rel="noopener">Source Code</a></p>
     </section>
   </aside>
@@ -1064,8 +1065,12 @@
   themeToggle.addEventListener('click', () => {
     const dark = document.documentElement.dataset.theme !== 'dark';
     applyTheme(dark);
-    savedTheme = dark ? 'dark' : 'light';
-    try { localStorage.setItem('printmiiout-theme', savedTheme); } catch (_) {}
+    // Matching the system theme means "auto", so drop the override.
+    savedTheme = dark === matchMedia('(prefers-color-scheme: dark)').matches ? null : (dark ? 'dark' : 'light');
+    try {
+      if (savedTheme) localStorage.setItem('printmiiout-theme', savedTheme);
+      else localStorage.removeItem('printmiiout-theme');
+    } catch (_) {}
   });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
     if (!savedTheme) applyTheme(e.matches);
