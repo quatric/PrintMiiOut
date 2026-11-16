@@ -61,6 +61,11 @@ add_library(pmo_core STATIC
 	src/fuse.cpp
 	src/simplify.cpp
 	src/split.cpp
+	src/raster.cpp
+	src/face2d.cpp
+	src/text2d.cpp
+	src/sdf.cpp
+	src/trinkets.cpp
 	src/pipeline.cpp)
 target_include_directories(pmo_core PUBLIC src third_party)
 target_link_libraries(pmo_core PUBLIC assimp::assimp)

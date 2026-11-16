@@ -26,6 +26,29 @@ const NEXT_SPLIT_STAGE = {
 	'fuse torso': 'Making the legs…',
 	'fuse legs': 'Smoothing…',
 };
+// A bobblehead: the head and the body are made apart, joined by a pivot.
+const NEXT_BOBBLE_STAGE = {
+	...NEXT_STAGE,
+	'body': 'Fitting the pivot…',
+	'bobble': 'Making the head…',
+	'fuse head': 'Making the body…',
+	'fuse body': 'Writing the STL…',
+};
+// Coins and stamps: the face drawn flat, then carved.
+const NEXT_FLAT_STAGE = {
+	'import and smooth shells': 'Drawing the face…',
+	'face art': 'Laying out the design…',
+	'design': 'Carving…',
+	'carve': 'Writing the STL…',
+	'carve the face': 'Shaping the handle…',
+	'shape the grip': 'Shaping the cap…',
+	'shape the base': 'Shaping the top…',
+	'shape the top': 'Shaping the cap…',
+	'shape the cap': 'Writing the STL…',
+};
+const FLAT = new Set(['coin', 'stamp', 'square-stamp']);
+// Rodin NTLG Pro B, cut down to the characters a name or a label uses.
+const FONT = new URL('../fonts/RodinNTLGPro-B-print.otf', import.meta.url);
 
 async function fetchBytes(url, what) {
 	let res;
@@ -59,14 +82,20 @@ export async function buildInBrowser(form, onStatus) {
 
 	onStatus('Downloading your Mii…');
 	const here = new URL('./', import.meta.url);
-	const [head, mask, body] = await Promise.all([
+	const make = job.make || 'figure';
+	const flat = FLAT.has(make);
+	const lettered = flat && !!(job.text || '').trim();
+	const [head, mask, body, font] = await Promise.all([
 		fetchBytes(job.glb, 'the Mii model'),
 		fetchBytes(job.png, 'the face texture'),
-		job.body ? fetchBytes(new URL(`miiBody${job.body.toUpperCase()}.glb`, here), 'the body') : null,
+		job.body && !flat ? fetchBytes(new URL(`miiBody${job.body.toUpperCase()}.glb`, here), 'the body') : null,
+		lettered ? fetchBytes(FONT, 'the font') : null,
 	]);
 
 	onStatus('Building your Mii in this browser…');
-	const stages = job.split && job.body ? NEXT_SPLIT_STAGE : NEXT_STAGE;
+	const stages = flat ? NEXT_FLAT_STAGE
+		: make === 'bobblehead' ? NEXT_BOBBLE_STAGE
+		: job.split && job.body ? NEXT_SPLIT_STAGE : NEXT_STAGE;
 	const worker = new Worker(new URL('worker.js', import.meta.url), { type: 'module' });
 	try {
 		const stl = await new Promise((resolve, reject) => {
@@ -87,17 +116,27 @@ export async function buildInBrowser(form, onStatus) {
 			};
 			const transfer = [head.buffer, mask.buffer];
 			if (body) transfer.push(body.buffer);
+			if (font) transfer.push(font.buffer);
 			worker.postMessage({
 				head: head.buffer,
 				mask: mask.buffer,
 				body: body ? body.buffer : null,
+				font: font ? font.buffer : null,
 				options: {
-					body: job.body || '',
+					make,
+					body: flat ? '' : job.body || '',
 					height: job.height,
 					build: job.build,
 					base: job.base !== false,
-					split: !!job.split,
+					split: make === 'figure' && !!job.split,
 					fit: Number(job.fit) || 0,
+					size: Number(job.size) || 0,
+					square: job.shape === 'square',
+					rim: job.rim !== false,
+					engraved: job.relief === 'engraved',
+					text: lettered ? job.text : '',
+					textBelow: job.text_pos === 'below',
+					border: job.border || 'none',
 				},
 			}, transfer);
 		});

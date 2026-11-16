@@ -84,3 +84,5 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 zlib (bundled with assimp): Copyright (C) 1995-2022 Jean-loup Gailly and Mark Adler, under the zlib license.
 
 stb_image (https://github.com/nothings/stb) by Sean Barrett: public domain (or MIT, at your choice).
+
+stb_truetype (https://github.com/nothings/stb) v1.26 by Sean Barrett, which reads the font coins and stamps are lettered in: public domain (or MIT, at your choice).

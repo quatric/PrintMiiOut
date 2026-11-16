@@ -3,10 +3,15 @@
 //
 //   printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb miiBodyM.glb]
 //                    [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM]
+//                    [--make figure|bobblehead|coin|stamp|square-stamp]
+//                    [--size MM] [--square] [--no-rim] [--engraved] [--border none|line|dashed]
+//                    [--text TEXT --font font.otf] [--text-below]
 //                    [--voxels 240] [--max-tris 600000]
 //
 // --fit gives pins and sliding pieces that many millimetres more room per
-// side (less when negative), for a printer whose holes come out too tight.
+// side (less when negative), for a printer whose holes come out too tight;
+// for a bobblehead, more room round its pivot; for a stamp, round its cap and
+// joints. --size is the coin across or the stamp's face across (mm).
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -29,7 +34,7 @@ static std::vector<uint8_t> readFile(const std::string& path) {
 
 int main(int argc, char** argv) {
 	std::vector<std::string> pos;
-	std::string mask, bodyGlb;
+	std::string mask, bodyGlb, fontPath;
 	pmo::Options o;
 	for (int i = 1; i < argc; i++) {
 		std::string a = argv[i];
@@ -58,6 +63,39 @@ int main(int argc, char** argv) {
 			o.split = o.assembled = true;
 		else if (a == "--fit")
 			o.fit = std::atof(next().c_str());
+		else if (a == "--make") {
+			std::string m = next();
+			if (m == "figure")
+				o.make = pmo::Make::Figure;
+			else if (m == "bobblehead")
+				o.make = pmo::Make::Bobblehead;
+			else if (m == "coin")
+				o.make = pmo::Make::Coin;
+			else if (m == "stamp")
+				o.make = pmo::Make::Stamp;
+			else if (m == "square-stamp")
+				o.make = pmo::Make::SquareStamp;
+			else {
+				std::fprintf(stderr, "--make: figure, bobblehead, coin, stamp or square-stamp\n");
+				return 1;
+			}
+		} else if (a == "--size")
+			o.size = std::atof(next().c_str());
+		else if (a == "--square")
+			o.squareCoin = true;
+		else if (a == "--no-rim")
+			o.rim = false;
+		else if (a == "--engraved")
+			o.engraved = true;
+		else if (a == "--border") {
+			std::string b = next();
+			o.border = b == "line" ? 1 : b == "dashed" ? 2 : 0;
+		} else if (a == "--text")
+			o.text = next();
+		else if (a == "--font")
+			fontPath = next();
+		else if (a == "--text-below")
+			o.textBelow = true;
 		else if (a == "--voxels")
 			o.voxelsPerHead = std::atof(next().c_str());
 		else if (a == "--max-tris")
@@ -69,13 +107,19 @@ int main(int argc, char** argv) {
 		std::fprintf(stderr,
 		             "usage: printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb body.glb]\n"
 		             "       [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM]\n"
+		             "       [--make figure|bobblehead|coin|stamp|square-stamp]\n"
+		             "       [--size MM] [--square] [--no-rim] [--engraved] [--border none|line|dashed]\n"
+		             "       [--text TEXT --font font.otf] [--text-below]\n"
 		             "       [--voxels 240] [--max-tris 600000]\n");
 		return 1;
 	}
 	auto head = readFile(pos[0]);
-	std::vector<uint8_t> maskData, bodyData;
+	std::vector<uint8_t> maskData, bodyData, fontData;
 	if (!mask.empty()) maskData = readFile(mask);
-	if (o.body) bodyData = readFile(bodyGlb);
+	bool flat = o.make == pmo::Make::Coin || o.make == pmo::Make::Stamp || o.make == pmo::Make::SquareStamp;
+	if (o.body && !flat) bodyData = readFile(bodyGlb);
+	if (!fontPath.empty()) fontData = readFile(fontPath);
+	o.font = {fontData.data(), fontData.size()};
 	o.log = [](const std::string& s) { std::cout << s << std::endl; };
 	try {
 		auto stl = pmo::generate({head.data(), head.size()}, {maskData.data(), maskData.size()},

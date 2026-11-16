@@ -216,7 +216,7 @@
     .panel.active { display: block; }
     .field + .field { margin-top: 16px; }
     label, .label { display: block; font-weight: 700; margin-bottom: 6px; }
-    input[type="text"], input[type="file"], textarea, select {
+    input[type="text"], input[type="number"], input[type="file"], textarea, select {
       width: 100%;
       background: var(--card);
       border: 3px solid var(--ink);
@@ -259,6 +259,8 @@
     .options { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     .options .field-wide { grid-column: 1 / -1; margin-top: 0; }
     .options .pieces-note { margin-top: -12px; }
+    .options .field { margin-top: 0; }
+    #text, #text-pos-row { margin-top: 12px; }
     .fit-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
     .fit-head output { font-weight: 700; }
     input[type="range"] { -webkit-appearance: none; appearance: none; display: block; width: calc(100% - 6px); height: 26px; margin: 2px 3px 0; background: transparent; cursor: pointer; }
@@ -478,8 +480,19 @@
           <span class="avatar"><img class="avatar-look" src="{{ url_for('static', filename='mii-face.webp') }}" alt="" width="67" height="67"></span>
           <div><p class="who">PrintMiiOut</p><p class="when">just now</p></div>
         </div>
-        <p class="say">How should they look?</p>
+        <p class="say">What should we make?</p>
         <div class="options">
+          <div class="field field-wide">
+            <span class="label" id="make-label">Make</span>
+            <div class="gender-row" role="group" aria-labelledby="make-label">
+              <button class="gender-btn selected" data-make="figure"       type="button" aria-pressed="true">Figure</button>
+              <button class="gender-btn"          data-make="bobblehead"   type="button" aria-pressed="false">Bobblehead</button>
+              <button class="gender-btn"          data-make="coin"         type="button" aria-pressed="false">Coin</button>
+              <button class="gender-btn"          data-make="stamp"        type="button" aria-pressed="false">Round stamp</button>
+              <button class="gender-btn"          data-make="square-stamp" type="button" aria-pressed="false">Square stamp</button>
+            </div>
+            <div class="field-note" id="make-note" hidden></div>
+          </div>
           <div class="field">
             <label for="expression">Expression</label>
             <select id="expression">
@@ -557,7 +570,7 @@
               </optgroup>
             </select>
           </div>
-          <div class="field">
+          <div class="field" data-makes="figure bobblehead">
             <span class="label" id="body-label">Body</span>
             <div class="gender-row" role="group" aria-labelledby="body-label">
               <button class="gender-btn selected" data-gender="auto" type="button" aria-pressed="true">Auto</button>
@@ -565,7 +578,7 @@
               <button class="gender-btn"          data-gender="f"    type="button" aria-pressed="false">Female</button>
             </div>
           </div>
-          <div class="field field-wide">
+          <div class="field field-wide" data-makes="figure bobblehead">
             <span class="label" id="proportions-label">Proportions</span>
             <div class="gender-row" role="group" aria-labelledby="proportions-label">
               <button class="gender-btn selected" data-proportions="mii"     type="button" aria-pressed="true">Their height &amp; build</button>
@@ -573,29 +586,77 @@
             </div>
             <div class="field-note">Very short, slim Miis keep their size, with arms and legs kept thick enough to print.</div>
           </div>
-          <div class="field" id="pieces-field">
+          <div class="field" id="pieces-field" data-makes="figure">
             <span class="label" id="pieces-label">Print as</span>
             <div class="gender-row" role="group" aria-labelledby="pieces-label">
               <button class="gender-btn selected" data-pieces="whole" type="button" aria-pressed="true">One figure</button>
               <button class="gender-btn"          data-pieces="split" type="button" aria-pressed="false">Snap-together parts</button>
             </div>
           </div>
-          <div class="field" id="base-field">
+          <div class="field" id="base-field" data-makes="figure bobblehead">
             <span class="label" id="base-label">Base</span>
             <div class="gender-row" role="group" aria-labelledby="base-label">
               <button class="gender-btn selected" data-base="on"  type="button" aria-pressed="true">With base</button>
               <button class="gender-btn"          data-base="off" type="button" aria-pressed="false">No base</button>
             </div>
           </div>
+          <div class="field" data-makes="coin" hidden>
+            <span class="label" id="shape-label">Shape</span>
+            <div class="gender-row" role="group" aria-labelledby="shape-label">
+              <button class="gender-btn selected" data-shape="round"  type="button" aria-pressed="true">Round</button>
+              <button class="gender-btn"          data-shape="square" type="button" aria-pressed="false">Rounded square</button>
+            </div>
+          </div>
+          <div class="field" data-makes="coin" hidden>
+            <span class="label" id="rim-label">Rim</span>
+            <div class="gender-row" role="group" aria-labelledby="rim-label">
+              <button class="gender-btn selected" data-rim="on"  type="button" aria-pressed="true">With rim</button>
+              <button class="gender-btn"          data-rim="off" type="button" aria-pressed="false">No rim</button>
+            </div>
+          </div>
+          <div class="field" data-makes="coin" hidden>
+            <span class="label" id="relief-label">Face and text</span>
+            <div class="gender-row" role="group" aria-labelledby="relief-label">
+              <button class="gender-btn selected" data-relief="raised"   type="button" aria-pressed="true">Stick out</button>
+              <button class="gender-btn"          data-relief="engraved" type="button" aria-pressed="false">Sink in</button>
+            </div>
+          </div>
+          <div class="field" data-makes="stamp square-stamp" hidden>
+            <span class="label" id="border-label">Border</span>
+            <div class="gender-row" role="group" aria-labelledby="border-label">
+              <button class="gender-btn selected" data-border="none"   type="button" aria-pressed="true">None</button>
+              <button class="gender-btn"          data-border="line"   type="button" aria-pressed="false">Line</button>
+              <button class="gender-btn"          data-border="dashed" type="button" aria-pressed="false">Dashed</button>
+            </div>
+          </div>
+          <div class="field" data-makes="coin stamp square-stamp" hidden>
+            <label for="size">Size in mm</label>
+            <input type="number" id="size" inputmode="decimal" min="20" max="80" step="1" placeholder="40" aria-describedby="size-note">
+            <div class="field-note" id="size-note">Across, 20 to 80&nbsp;mm.</div>
+          </div>
+          <div class="field field-wide" data-makes="coin stamp square-stamp" hidden>
+            <span class="label" id="lettering-label">Text</span>
+            <div class="gender-row" role="group" aria-labelledby="lettering-label">
+              <button class="gender-btn selected" data-lettering="name"   type="button" aria-pressed="true">Their name</button>
+              <button class="gender-btn"          data-lettering="custom" type="button" aria-pressed="false">My own</button>
+              <button class="gender-btn"          data-lettering="none"   type="button" aria-pressed="false">No text</button>
+            </div>
+            <input type="text" id="text" maxlength="32" placeholder="e.g. Jasmine" aria-label="Your text" autocomplete="off" hidden>
+            <div class="gender-row" role="group" aria-label="Where the text goes" id="text-pos-row">
+              <button class="gender-btn selected" data-textpos="above" type="button" aria-pressed="true">Above the face</button>
+              <button class="gender-btn"          data-textpos="below" type="button" aria-pressed="false">Below</button>
+            </div>
+            <div class="field-note" id="lettering-note">Lettered in Rodin NTLG, Japanese included. Their name works for Miis from a Wii, 3DS, Wii U or Switch, and NNIDs.</div>
+          </div>
           <div class="field-note field-wide pieces-note" id="pieces-note" hidden>The head, torso, arms and legs print on their own, each standing up, with pins that press in firmly like building bricks. Print at 100% scale so the pins fit.</div>
           <div class="field field-wide" id="fit-field" hidden>
             <div class="fit-head">
-              <label class="label" for="fit">Pin fit</label>
+              <label class="label" for="fit" id="fit-label">Pin fit</label>
               <output id="fit-value" for="fit">Standard</output>
             </div>
             <input type="range" id="fit" min="-0.1" max="0.2" step="0.05" value="0" aria-describedby="fit-note">
             <div class="fit-ends" aria-hidden="true"><span>Tighter</span><span>Looser</span></div>
-            <div class="field-note" id="fit-note">Pins too hard to press in? Go looser. Slipping out? Go tighter. Each step gives every pin and the neck 0.05&nbsp;mm more or less room all round. Remembered for your next Mii.</div>
+            <div class="field-note" id="fit-note"></div>
           </div>
         </div>
       </article>
@@ -656,6 +717,7 @@
       <h2>About</h2>
       <p>PrintMiiOut fetches your Mii, builds a head and body right in your browser, and hands you an STL ready to slice for your 3D printer. Print your Mii with supports turned on.</p>
       <p>You can bring a Mii from a Nintendo Network ID (Wii U), a Pretendo Network ID, a binary Mii file (.mii or .ffsd), or a Mii QR code image. Glasses print as a flat frame with temple arms, and the figure can print as snap-together parts.</p>
+      <p>It also makes print-in-place bobbleheads, coins with the face drawn flat, and round or square stamps to use with an ink pad, lettered with their name or your own text.</p>
       <p>Printer, filament and patience not included.</p>
     </section>
     <section class="px">
@@ -713,27 +775,78 @@
     });
   });
 
-  // ── Body and proportions toggles ──────────────────────────────────────────
-  let bodyGender = 'auto';
-  let bodyProportions = 'mii';
-  let printPieces = 'whole';
-  let standBase = 'on';
+  // ── What to make, and the choices that go with it ─────────────────────────
+  const choice = {
+    make: 'figure', gender: 'auto', proportions: 'mii', pieces: 'whole', base: 'on',
+    shape: 'round', rim: 'on', relief: 'raised', border: 'none', lettering: 'name', textpos: 'above',
+  };
+  const MAKES = {
+    'figure': { note: '' },
+    'bobblehead': {
+      note: 'The head hangs on a ball that prints inside it, so it nods straight off the printer. Print with supports under the head, then wiggle it gently to free the ball.',
+      fit: 'Pivot fit',
+      fitNote: 'Head stuck after printing? Go looser. Too floppy? Go tighter. Each step gives the ball 0.05&nbsp;mm more or less room all round.',
+    },
+    'coin': {
+      note: 'The face is drawn flat, like a sticker. Prints flat on its back with no supports.',
+      size: [20, 80, 40], sizeNote: 'Across, 20 to 80&nbsp;mm.',
+    },
+    'stamp': {
+      note: 'A name stamp for an ink pad: a grip, the face, which prints face up and presses into it, and a cap. Stamped, the face and text read the right way round.',
+      size: [12, 40, 20], sizeNote: 'Across the face, 12 to 40&nbsp;mm.',
+      fit: 'Fit', fitNote: 'Face or cap too hard to press on? Go looser. Falling off? Go tighter. Each step gives them 0.05&nbsp;mm more or less room all round.',
+    },
+    'square-stamp': {
+      note: 'A square stamp: a base, the face plate, a domed top that shows the design, two pins and a cap. Stamped, the face and text read the right way round.',
+      size: [15, 40, 25], sizeNote: 'Width of the face, 15 to 40&nbsp;mm; it is a fifth taller than wide.',
+      fit: 'Fit', fitNote: 'Plate, pins or cap too hard to press in? Go looser. Falling out? Go tighter. Each step gives them 0.05&nbsp;mm more or less room all round.',
+    },
+  };
+  const PIN_FIT_NOTE = 'Pins too hard to press in? Go looser. Slipping out? Go tighter. Each step gives every pin and the neck 0.05&nbsp;mm more or less room all round.';
+  const sizeInput = document.getElementById('size');
+  const sizes = {};  // what was typed for each make
+  const textInput = document.getElementById('text');
+
+  function showChoices() {
+    const m = MAKES[choice.make];
+    document.querySelectorAll('[data-makes]').forEach(el => {
+      el.hidden = !el.dataset.makes.split(' ').includes(choice.make);
+    });
+    const note = document.getElementById('make-note');
+    note.textContent = m.note;
+    note.hidden = !m.note;
+    const split = choice.make === 'figure' && choice.pieces === 'split';
+    document.getElementById('pieces-note').hidden = !split;
+    document.getElementById('fit-field').hidden = !(split || m.fit);
+    document.getElementById('fit-label').textContent = split ? 'Pin fit' : m.fit || 'Pin fit';
+    document.getElementById('fit-note').innerHTML = (split ? PIN_FIT_NOTE : m.fitNote || PIN_FIT_NOTE) + ' Remembered for your next Mii.';
+    if (m.size) {
+      const [lo, hi, usual] = m.size;
+      sizeInput.min = lo;
+      sizeInput.max = hi;
+      sizeInput.placeholder = usual;
+      sizeInput.value = sizes[choice.make] || '';
+      document.getElementById('size-note').innerHTML = m.sizeNote + ` Usually ${usual}.`;
+    }
+    textInput.hidden = choice.lettering !== 'custom';
+    document.getElementById('text-pos-row').hidden = choice.lettering === 'none';
+  }
+
   document.querySelectorAll('.gender-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      if (btn.dataset.gender) bodyGender = btn.dataset.gender;
-      if (btn.dataset.proportions) bodyProportions = btn.dataset.proportions;
-      if (btn.dataset.base) standBase = btn.dataset.base;
-      if (btn.dataset.pieces) {
-        printPieces = btn.dataset.pieces;
-        document.getElementById('pieces-note').hidden = printPieces !== 'split';
-        document.getElementById('fit-field').hidden = printPieces !== 'split';
+      for (const key of Object.keys(choice)) {
+        if (btn.dataset[key]) choice[key] = btn.dataset[key];
       }
       btn.closest('.gender-row').querySelectorAll('.gender-btn').forEach(b => {
         b.classList.toggle('selected', b === btn);
         b.setAttribute('aria-pressed', b === btn);
       });
+      showChoices();
+      if (btn.dataset.lettering === 'custom') textInput.focus();
     });
   });
+  sizeInput.addEventListener('input', () => { sizes[choice.make] = sizeInput.value; });
+  showChoices();
 
   // ── File reader (data tab) ─────────────────────────────────────────────────
   let uploadedFileB64 = null;
@@ -864,11 +977,31 @@
 
     const fd = new FormData();
     fd.append('input_type', activeTab);
-    fd.append('body_type',  bodyGender);
-    fd.append('proportions', bodyProportions);
-    fd.append('pieces', printPieces);
-    fd.append('base', standBase);
+    fd.append('make', choice.make.replace('-', '_'));
+    fd.append('body_type',  choice.gender);
+    fd.append('proportions', choice.proportions);
+    fd.append('pieces', choice.pieces);
+    fd.append('base', choice.base);
     fd.append('fit', fitInput.value);
+    const flat = ['coin', 'stamp', 'square-stamp'].includes(choice.make);
+    if (flat) {
+      const size = parseFloat(sizeInput.value);
+      const [lo, hi] = MAKES[choice.make].size;
+      if (sizeInput.value.trim() && !(size >= lo && size <= hi)) {
+        return showError(`Pick a size from ${lo} to ${hi} mm, or leave it empty.`);
+      }
+      if (choice.lettering === 'custom' && !textInput.value.trim()) {
+        return showError('Type the text to put on it, or pick another text option.');
+      }
+      fd.append('size', sizeInput.value.trim() ? String(size) : '0');
+      fd.append('shape', choice.shape);
+      fd.append('rim', choice.rim);
+      fd.append('relief', choice.relief);
+      fd.append('border', choice.border);
+      fd.append('lettering', choice.lettering);
+      fd.append('text', textInput.value);
+      fd.append('text_pos', choice.textpos);
+    }
     fd.append('expression', document.getElementById('expression').value);
 
     if (activeTab === 'nnid') {
@@ -913,7 +1046,7 @@
       if (builtUrl) URL.revokeObjectURL(builtUrl);
       builtUrl = URL.createObjectURL(stl);
       downloadLink.href = builtUrl;
-      downloadLink.download = 'printmiiout.stl';
+      downloadLink.download = choice.make === 'figure' ? 'printmiiout.stl' : `printmiiout-${choice.make}.stl`;
       setStage('result');
     } catch (err) {
       setStage('input');

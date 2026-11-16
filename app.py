@@ -134,9 +134,9 @@ def _mii_png_url(params: dict) -> str:
     return _build_mii_url("/miis/image.png", png_params)
 
 
-def _mii_traits(form_params: dict) -> dict:
-    """The Mii's gender, height and build, looking the Mii up if needed.
-    Unknown formats and failed lookups give no gender and average proportions."""
+def _mii_raw(form_params: dict) -> bytes | None:
+    """The Mii's data, looking an NNID or PNID up if need be, or None when
+    the lookup fails or the data cannot be read."""
     data = form_params.get("data")
     if not data and form_params.get("nnid"):
         try:
@@ -149,18 +149,30 @@ def _mii_traits(form_params: dict) -> dict:
             pass
     if data:
         try:
-            return miidata.traits(miidata.decode(data))
+            return miidata.decode(data)
+        except Exception:
+            pass
+    return None
+
+
+def _mii_traits(raw: bytes | None) -> dict:
+    """The Mii's gender, height and build. Unknown formats and failed
+    lookups give no gender and average proportions."""
+    if raw:
+        try:
+            return miidata.traits(raw)
         except Exception:
             pass
     return {"gender": None, "height": miidata.AVERAGE, "build": miidata.AVERAGE}
 
 
-def _body_for(form_params: dict, body_type: str, proportions: str) -> tuple[str, int, int]:
+def _body_for(raw, body_type: str, proportions: str) -> tuple[str, int, int]:
     """The body to build ("m", "f" or "none") and the height and build to
-    give it, looking the Mii up when the choice depends on it."""
+    give it. raw: the Mii's data, or a function that looks it up, called
+    only when the choice depends on it."""
     traits = {"gender": None, "height": miidata.AVERAGE, "build": miidata.AVERAGE}
     if body_type == "auto" or proportions == "mii":
-        traits = _mii_traits(form_params)
+        traits = _mii_traits(raw() if callable(raw) else raw)
     if body_type == "auto":
         body_type = traits["gender"] or "m"
     if proportions != "mii":
@@ -208,6 +220,11 @@ LLMS_TXT = f"""# PrintMiiOut (printmiiout.com)
 - Glasses print as a flat frame that rests on the face, with temple arms holding it to the head.
 - The figure prints as one piece by default, or as snap-together parts: the head, torso, arms and legs (with or without the base) print separately and press together on pins with crush ribs, like building bricks. A "Pin fit" slider loosens or tightens every pin for the visitor's printer.
 - The body follows the Mii's own height and build, scaled bone by bone as Nintendo's editor scales it, with arms and legs held thick enough to print. An "Average" option uses the middle height and build instead.
+- Besides a figure it makes:
+  - a print-in-place bobblehead: the head hangs on a ball-ended post rising from the body, captured inside the head as it prints, so it nods without assembly;
+  - a coin or token with the face drawn flat (round or rounded square, with or without a rim, raised or engraved), lettered with the Mii's name or any text in Rodin NTLG;
+  - a round self-inking-style name stamp for an ink pad: a bullet-shaped grip, a face plug that prints face up and presses into it, and a cap;
+  - a square stamp with a domed top showing the design, a face plate, two pins and a cap.
 
 ## Source
 
@@ -234,26 +251,65 @@ def llms_txt():
     return _text(LLMS_TXT, "text/plain")
 
 
-def _parse_form() -> tuple[tuple[dict, str, str, bool, bool, float] | None, str | None]:
-    """The Mii API params, body type, proportions, whether to print the
-    figure in snap-together pieces, whether to stand it on a base and how
-    much more room (or less) to give its pins for the printer, as the
+MAKES = ("figure", "bobblehead", "coin", "stamp", "square_stamp")
+FLAT_MAKES = ("coin", "stamp", "square_stamp")
+TEXT_MAX = 32
+
+
+def _clean_text(text: str) -> str:
+    """Lettering as typed, without control or formatting characters, on one
+    line and no longer than TEXT_MAX characters."""
+    text = "".join(c if c.isprintable() else " " for c in text)
+    return " ".join(text.split())[:TEXT_MAX]
+
+
+def _parse_form() -> tuple[tuple[dict, dict] | None, str | None]:
+    """The Mii API params and the choices of what to make and how, as the
     /resolve form asks for them, or an error message for the user."""
     input_type = request.form.get("input_type", "nnid")
+    make = request.form.get("make", "figure")
+    if make not in MAKES:
+        make = "figure"
     body_type   = request.form.get("body_type", "auto")
     if body_type not in ("auto", "m", "f", "none"):
         body_type = "auto"
+    if make == "bobblehead" and body_type == "none":
+        body_type = "auto"  # the head bobbles on a body
     proportions = request.form.get("proportions", "mii")
     if proportions not in ("mii", "average"):
         proportions = "mii"
-    split = request.form.get("pieces", "whole") == "split"
-    base = request.form.get("base", "on") != "off"
     try:
         fit = float(request.form.get("fit", "0"))
     except ValueError:
         fit = 0.0
     # Millimetres per side, as far as the page's slider goes.
     fit = round(min(max(fit, -0.1), 0.2), 2) if math.isfinite(fit) else 0.0
+    try:
+        size = float(request.form.get("size", "0"))
+    except ValueError:
+        size = 0.0
+    # Millimetres across; 0 for the usual size. The core keeps each make's
+    # size within what it can print.
+    size = round(min(max(size, 0.0), 100.0), 1) if math.isfinite(size) else 0.0
+    lettering = request.form.get("lettering", "name")
+    if lettering not in ("none", "name", "custom"):
+        lettering = "name"
+    choices = {
+        "make": make,
+        "body_type": body_type,
+        "proportions": proportions,
+        "split": make == "figure" and request.form.get("pieces", "whole") == "split",
+        "base": request.form.get("base", "on") != "off",
+        "fit": fit,
+        "size": size,
+        "shape": "square" if request.form.get("shape") == "square" else "round",
+        "rim": request.form.get("rim", "on") != "off",
+        "relief": "engraved" if request.form.get("relief") == "engraved" else "raised",
+        "lettering": lettering,
+        "text": _clean_text(request.form.get("text", "")) if lettering == "custom" else "",
+        "text_pos": "below" if request.form.get("text_pos") == "below" else "above",
+        "border": request.form.get("border") if request.form.get("border") in ("line", "dashed") else "none",
+    }
 
     # Build the API params based on input type
     api_params: dict = {}
@@ -327,7 +383,7 @@ def _parse_form() -> tuple[tuple[dict, str, str, bool, bool, float] | None, str 
         expression = "normal"
     api_params["expression"] = expression
 
-    return (api_params, body_type, proportions, split, base, fit), None
+    return (api_params, choices), None
 
 
 @app.route("/resolve", methods=["POST"])
@@ -338,18 +394,44 @@ def resolve():
     form, error = _parse_form()
     if error:
         return jsonify(error=error), 400
-    api_params, body_type, proportions, split, base, fit = form
-    body_type, height, build = _body_for(api_params, body_type, proportions)
-    return jsonify(
-        glb=_mii_glb_url(api_params),
-        png=_mii_png_url(api_params),
-        body=None if body_type == "none" else body_type,
-        height=height,
-        build=build,
-        split=split,
-        base=base,
-        fit=fit,
-    )
+    api_params, c = form
+    raw_cache: list = []
+
+    def raw():
+        if not raw_cache:
+            raw_cache.append(_mii_raw(api_params))
+        return raw_cache[0]
+
+    job = {
+        "glb": _mii_glb_url(api_params),
+        "png": _mii_png_url(api_params),
+        "make": c["make"].replace("_", "-"),
+        "fit": c["fit"],
+    }
+    if c["make"] in FLAT_MAKES:
+        text = c["text"]
+        if c["lettering"] == "name":
+            mii = raw()
+            text = _clean_text(miidata.name(mii)) if mii else ""
+        job.update(
+            size=c["size"],
+            shape=c["shape"],
+            rim=c["rim"],
+            relief=c["relief"],
+            text=text,
+            text_pos=c["text_pos"],
+            border=c["border"],
+        )
+    else:
+        body_type, height, build = _body_for(raw, c["body_type"], c["proportions"])
+        job.update(
+            body=None if body_type == "none" else body_type,
+            height=height,
+            build=build,
+            split=c["split"],
+            base=c["base"],
+        )
+    return jsonify(job)
 
 
 @app.route("/decode-qr-raw", methods=["POST"])

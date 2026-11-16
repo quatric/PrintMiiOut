@@ -8,6 +8,9 @@ PrintMiiOut converts Nintendo Mii characters into 3D-printable STL models. Enter
 - **True Body Proportions**: The body follows the Mii's own height and build, scaled bone by bone the way Nintendo's editor scales it (the same rules as [FFL.js](https://github.com/ariankordi/FFL.js)). Arms, legs, wrists and ankles are held at a printable minimum thickness, so a very short, slim Mii keeps its look without snapping. An "Average" option uses the middle height and build instead.
 - **Printable Glasses**: Glasses become a flat frame that rests on the face, with temple arms holding it to the head.
 - **Snap-Together Parts**: Optionally, the head, torso, arms and legs (with or without the base) print as separate pieces, each standing as it stands in the figure, and press together on separate pins with crush ribs, like building bricks. The arms come off square to the upper arm where it comes free of the body, the neck stays on the torso and fits into a hole in the head (as a minifigure's does), and the legs come off just below the shirt or skirt, on two pins so they cannot turn. Each pin is as thick as the cut and both pieces allow and goes in as deep as holds it firmly, and the torso and legs keep clear of the way the head and arms slide in. A tiny Mii's legs still get two pins, and its neck pin goes at least 6 mm into the torso and the head. The pins press in with 0.12 mm to spare on their ribs; a **Pin fit** slider gives every pin and the neck up to 0.2 mm more room per side (or 0.1 mm less) for a printer whose holes come out too tight or too loose, and the page remembers it. Print at 100% scale so the pins fit (`--split` on the core's command line, with `--assembled` to check the fit with every piece in place).
+- **Print-in-Place Bobblehead**: The head hangs on a ball at the top of a post rising from the body, and prints around it with the ball already inside, so it nods straight off the printer. The ball sits just above the head's centre of mass (found from the solid head, not its shell), so the head hangs upright and rocks back to rest; its chamber has a pointed roof and a flared channel for the post, so it prints without support inside. The head is raised clear of the shoulders to give it room to swing. Print with supports under the head, then wiggle it to free the ball. The **Fit** slider widens or narrows the gap round the ball.
+- **Coins**: The face drawn flat like a sticker, from the same 3D head seen straight on (hair and beard filled, the face and cap outlined, the eyes, brows, mouth and glasses traced from their textures, with lines too fine to print thickened), on a round or rounded-square coin, with or without a rim, raised or engraved. It can be lettered with the Mii's name (read from the Mii data) or any text, arched over the top or straight above or below, in Rodin NTLG Pro.
+- **Stamps for an Ink Pad**: A round name stamp in three pieces: a bullet-shaped grip with a thumb dip and a strap hole, a face plug that prints face up (so the face comes out crisp) and presses into the grip on crush ribs with a key so it only goes in one way round, and a cap. A square stamp has a base, a face plate, a domed top that carries a raised preview of the design, two pins and a cap. Stamped, the face and text read the right way round. Ink them with a stamp pad.
 - **Web Interface**: Clean, responsive web UI built with Flask and Vanilla CSS.
 
 ## Checking the body against FFL.js
@@ -25,7 +28,7 @@ To check the body alone: `python miibody.py miiBodyF_wiiu_plain.glb body.stl --h
 
 ## Building in the browser
 
-`core/` is the pipeline, in C++: assimp imports the head and body GLBs and exports the STL, and the rest (smoothing, the face emboss, glasses, the body, fusing into one solid, simplifying, the snap-together parts) is our own code. It builds a command line tool for checking models without a browser and the WebAssembly module that the site runs in a Web Worker to build every model. The built module is checked in under `static/client/`, so the site needs no build step; see [core/README.md](core/README.md) to rebuild it.
+`core/` is the pipeline, in C++: assimp imports the head and body GLBs and exports the STL, stb_truetype reads the lettering font, and the rest (smoothing, the face emboss, glasses, the body, fusing into one solid, simplifying, the snap-together parts, the bobblehead, and the flat face, coins and stamps) is our own code. It builds a command line tool for checking models without a browser and the WebAssembly module that the site runs in a Web Worker to build every model. The built module is checked in under `static/client/`, so the site needs no build step; see [core/README.md](core/README.md) to rebuild it.
 
 The bodies the browser uses (`static/client/miiBody{M,F}.glb`) are the game's bodies re-saved without mesh quantization, which assimp cannot read, and with the standing pose baked in:
 
@@ -34,11 +37,19 @@ python tools/bake_body.py miiBodyM_wiiu_plain.glb static/client/miiBodyM.glb
 python tools/bake_body.py miiBodyF_wiiu_plain.glb static/client/miiBodyF.glb
 ```
 
+The font coins and stamps are lettered in (`static/fonts/RodinNTLGPro-B-print.otf`) is Rodin NTLG Pro B cut down to Latin, Greek, Cyrillic, kana, the JIS X 0208 kanji and the symbols Mii names use; the browser fetches it only when there is text:
+
+```bash
+pip install fonttools
+python tools/subset_font.py ~/Library/Fonts.old/FOT-RodinNTLGPro-B.otf static/fonts/RodinNTLGPro-B-print.otf
+```
+
 To compare two STLs side by side (say before and after a change), `tools/reference` takes `--a before.stl --b after.stl`, with `--face` or `--box x0,y0,z0,x1,y1,z1` to zoom in.
 
 ## Credits
-- **3D processing**: In the browser by [assimp](https://github.com/assimp/assimp) and [stb_image](https://github.com/nothings/stb).
+- **3D processing**: In the browser by [assimp](https://github.com/assimp/assimp), [stb_image](https://github.com/nothings/stb) and stb_truetype.
 - **Body scaling**: Rules from [FFL.js](https://github.com/ariankordi/FFL.js) by Arian Kordi, after Nintendo's own editor body.
+- **Lettering font**: Rodin NTLG Pro by Fontworks.
 - **Display font**: [Nintendo U Version 3](https://www.deviantart.com/dledeviant/art/Nintendo-U-Version-3-595000916) by dledeviant, free for non-commercial use.
 - **Background tiles**: from [mii-unsecure](https://mii-unsecure.ariankordi.net/) by Arian Kordi, used with permission.
 - **Mii rendering**: Powered by [mii-unsecure.ariankordi.net](https://mii-unsecure.ariankordi.net/) by Arian Kordi.

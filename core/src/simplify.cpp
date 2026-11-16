@@ -88,7 +88,48 @@ public:
 		}
 	}
 
-	void run(size_t targetTris, double maxCost, double shortLen) {
+	/** Collapse, in a few cheap passes, every vertex whose faces all lie in
+	 *  one plane into a neighbour: the surface stays where it was, and the
+	 *  heap has far less to do. Meshes contoured from a grid have acres of
+	 *  such triangles on their flat faces. */
+	void collapseFlat(double cosTolerance, size_t targetTris) {
+		for (int round = 0; round < 4 && live_ > targetTris; round++) {
+			size_t merged = 0;
+			for (int u = 0; u < (int)m_.v.size() && live_ > targetTris; u++) {
+				if (faces_[u].empty() || isLocked(u)) continue;
+				V3 n0;
+				bool any = false, flat = true;
+				for (int f : faces_[u]) {
+					if (!alive_[f]) continue;
+					const Tri& t = m_.f[f];
+					V3 n = normalized(cross(m_.v[t[1]] - m_.v[t[0]], m_.v[t[2]] - m_.v[t[0]]));
+					if (!any) {
+						n0 = n;
+						any = true;
+					} else if (dot(n, n0) < cosTolerance) {
+						flat = false;
+						break;
+					}
+				}
+				if (!any || !flat) continue;
+				std::vector<int>& nb = scratchC_;
+				neighbours(u, nb);
+				for (int v : nb) {
+					if (isLocked(v)) continue;
+					V3 p = m_.v[v];
+					if (valid(u, v, p)) {
+						merge(u, v, p);
+						merged++;
+						break;
+					}
+				}
+			}
+			if (!merged) break;
+		}
+	}
+
+	void run(size_t targetTris, double maxCost, double shortLen, bool flatFirst) {
+		if (flatFirst) collapseFlat(0.99995, targetTris);
 		if (shortLen > 0) collapseShort(shortLen);
 		for (int u = 0; u < (int)m_.v.size(); u++)
 			if (!faces_[u].empty()) push(u);
@@ -271,10 +312,10 @@ private:
 
 }  // namespace
 
-void simplify(Mesh& m, size_t maxTriangles, double maxError, const std::vector<char>* locked) {
+void simplify(Mesh& m, size_t maxTriangles, double maxError, const std::vector<char>* locked, bool flatFirst) {
 	if (m.f.size() <= maxTriangles) return;
 	Simplifier s(m, locked);
-	s.run(maxTriangles, maxError * maxError, maxError * 1.6);
+	s.run(maxTriangles, maxError * maxError, maxError * 1.6, flatFirst);
 }
 
 }  // namespace pmo

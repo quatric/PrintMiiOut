@@ -54,8 +54,16 @@ struct Carve {
 	double jointRadius = 0, jointSlab = 0;
 };
 
+/** Any other hollow to leave: its signed distance (negative inside the
+ *  hollow), looked at only within the box. Cut exactly, like a socket. */
+struct Cut {
+	std::function<double(const V3&)> distance;
+	V3 lo, hi;
+};
+
 struct FuseExtras {
 	std::vector<Socket>* sockets = nullptr;
+	std::vector<Cut> cuts;
 	std::vector<Carve> carves;
 	Field* field = nullptr;  // filled with the result's signed distance
 };
@@ -97,7 +105,10 @@ int dropSpecks(Mesh& m, double minFraction);
 /** Simplify to at most maxTriangles by quadric error edge collapse,
  *  stopping early once a collapse would move the surface more than about
  *  maxError (model units). Never changes the topology, and never moves a
- *  vertex marked in locked (simplify.cpp). */
-void simplify(Mesh& m, size_t maxTriangles, double maxError, const std::vector<char>* locked = nullptr);
+ *  vertex marked in locked (simplify.cpp). flatFirst first collapses, in
+ *  cheap passes, the vertices inside flat regions, for meshes that have
+ *  many of them. */
+void simplify(Mesh& m, size_t maxTriangles, double maxError, const std::vector<char>* locked = nullptr,
+              bool flatFirst = false);
 
 }  // namespace pmo

@@ -372,6 +372,12 @@ Mesh contour(Voxels& g, const LogFn& log, const FuseExtras& extras) {
 			});
 		}
 	}
+	for (const Cut& c : extras.cuts) {
+		forBox(c.lo - V3(2, 2, 2) * voxel, c.hi + V3(2, 2, 2) * voxel, [&](int i, int j, int k) {
+			double v = -c.distance(point(i, j, k)) - level;
+			if (v > -2 * voxel) addMod(at(i, j, k), v, true);
+		});
+	}
 	for (const Carve& c : extras.carves) {
 		if (!c.other || c.other->empty()) continue;
 		const Field& o = *c.other;

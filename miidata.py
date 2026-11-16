@@ -1,6 +1,7 @@
 """
-Reads the traits PrintMiiOut needs (gender, height, build) out of the Mii
-data formats the site accepts, without rendering anything.
+Reads the traits PrintMiiOut needs (gender, height, build, and the name to
+letter a coin or stamp with) out of the Mii data formats the site accepts,
+without rendering anything.
 
 Heights and builds run 0 to 127 in every format here, 64 being the middle
 of the editor's slider.
@@ -76,3 +77,30 @@ def traits(raw):
         "height": int(height),
         "build": int(build),
     }
+
+
+# Where each format keeps the nickname: (offset, bytes, encoding).
+_NAME_AT = {
+    96: (0x1A, 20, "utf-16-le"),  # 3DS / Wii U
+    92: (0x1A, 20, "utf-16-le"),
+    74: (0x02, 20, "utf-16-be"),  # Wii
+    76: (0x02, 20, "utf-16-be"),
+    88: (0x10, 22, "utf-16-le"),  # Switch CharInfo
+    68: (0x1C, 20, "utf-16-le"),  # Switch StoreData and CoreData
+    48: (0x1C, 20, "utf-16-le"),
+}
+
+
+def name(raw):
+    """The Mii's nickname, or "" when the format keeps none (Mii Studio
+    data) or it cannot be read."""
+    at = _NAME_AT.get(len(raw))
+    if not at:
+        return ""
+    offset, size, encoding = at
+    try:
+        text = raw[offset:offset + size].decode(encoding, errors="ignore")
+    except Exception:
+        return ""
+    text = text.split("\x00", 1)[0]
+    return "".join(c for c in text if c.isprintable()).strip()

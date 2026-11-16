@@ -14,12 +14,15 @@
 #include <assimp/scene.h>
 
 #include "body.hpp"
+#include "face2d.hpp"
 #include "fuse.hpp"
 #include "geom.hpp"
 #include "head.hpp"
 #include "image.hpp"
 #include "mesh_ops.hpp"
 #include "split.hpp"
+#include "text2d.hpp"
+#include "trinkets.hpp"
 
 namespace pmo {
 
@@ -607,6 +610,309 @@ Mesh splitFigure(std::vector<Mesh>& headParts, Mesh& body, const Body& skeleton,
 	return all;
 }
 
+/** A solid of revolution about a vertical axis through (x, y): the
+ *  profile runs (radius, z) from the axis at the bottom to the axis at
+ *  the top. */
+Mesh lathe(const std::vector<std::pair<double, double>>& profile, double x, double y, int segments) {
+	Mesh m;
+	const int n = (int)profile.size();
+	for (int k = 1; k < n - 1; k++)
+		for (int s = 0; s < segments; s++) {
+			double a = 2 * M_PI * s / segments;
+			m.v.push_back({x + profile[k].first * std::cos(a), y + profile[k].first * std::sin(a), profile[k].second});
+		}
+	const int bottom = (int)m.v.size(), top = bottom + 1;
+	m.v.push_back({x, y, profile.front().second});
+	m.v.push_back({x, y, profile.back().second});
+	auto at = [&](int ring, int s) { return ring * segments + (s % segments); };
+	for (int s = 0; s < segments; s++) {
+		m.f.push_back({bottom, at(0, s + 1), at(0, s)});
+		m.f.push_back({top, at(n - 3, s), at(n - 3, s + 1)});
+		for (int ring = 0; ring + 1 < n - 2; ring++) {
+			m.f.push_back({at(ring, s), at(ring, s + 1), at(ring + 1, s + 1)});
+			m.f.push_back({at(ring, s), at(ring + 1, s + 1), at(ring + 1, s)});
+		}
+	}
+	return m;
+}
+
+/** Sand and tidy a fused piece, leaving what is within half a voxel or so
+ *  of a cut (an exact hollow) as it is. */
+void finishWithCuts(Mesh& solid, const std::vector<Cut>& cuts, double voxel, size_t maxTriangles) {
+	auto onCut = [&](const Mesh& m) {
+		std::vector<char> on(m.v.size(), 0);
+		for (size_t i = 0; i < m.v.size(); i++)
+			for (const Cut& c : cuts)
+				if (std::fabs(c.distance(m.v[i])) < 0.75 * voxel) on[i] = 1;
+		return on;
+	};
+	std::vector<char> free = onCut(solid);
+	for (char& c : free) c = !c;
+	smooth(solid, 0.5, 2, &free);
+	dropSpecks(solid, kMinIsland);
+	std::vector<char> locked = onCut(solid);
+	simplify(solid, maxTriangles, voxel * 0.25, &locked);
+}
+
+/** A bobblehead that prints in place: the head hangs on a knob at the top
+ *  of a post that comes up out of the neck, inside a hollow in the head
+ *  with room all round. The knob sits above the head's centre of mass, so
+ *  the head hangs upright and rocks when tapped; the hollow narrows under
+ *  the knob, so the head never comes off. Every overhang inside is steep
+ *  enough to print without support. */
+Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Options& o,
+                const std::function<void(const std::string&)>& log, const std::function<void(const char*)>& tick) {
+	char buf[256];
+	const double voxel = unit / o.voxelsPerHead;
+	const double loosen = std::clamp(o.fit, -0.2, 0.5);
+	const double c = std::max(0.25, 0.45 + loosen);  // room all round the knob and post
+	const double rp = std::clamp(0.06 * unit, 1.6, 2.6), rb = rp + 1.3;
+	const double alpha = 40 * M_PI / 180;  // overhangs inside: no flatter than this from upright
+	const double flare = 6 * M_PI / 180;   // the hollow widens going down, so the head can rock
+
+	// The neck, which the post replaces.
+	std::vector<char> neck(body.v.size(), 0);
+	for (size_t f = 0; f < body.f.size(); f++)
+		if (faceTag(body, int(f)) == kTagNeck)
+			for (int k : body.f[f]) neck[k] = 1;
+	double cx = 0, cy = 0, n = 0, neckBase = 1e300;
+	for (size_t i = 0; i < body.v.size(); i++)
+		if (neck[i]) {
+			cx += body.v[i].x;
+			cy += body.v[i].y;
+			n++;
+			neckBase = std::min(neckBase, body.v[i].z);
+		}
+	if (!n) throw std::runtime_error("bobblehead: the body has no neck");
+	cx /= n;
+	cy /= n;
+	double neckRadius = 0;
+	for (size_t i = 0; i < body.v.size(); i++)
+		if (neck[i]) neckRadius = std::max(neckRadius, std::hypot(body.v[i].x - cx, body.v[i].y - cy));
+	double headBottom = 1e300;
+	for (const V3& p : headParts[0].v)
+		if (std::hypot(p.x - cx, p.y - cy) < 1.3 * neckRadius) headBottom = std::min(headBottom, p.z);
+
+	// Lift the head clear of the shoulders, with a little neck showing.
+	Mesh torso = body;
+	keepFaces(torso, [&](int f) { return faceTag(torso, f) != kTagNeck && faceTag(torso, f) != kTagCap; });
+	compact(torso);
+	BVH torsoBVH(torso);
+	// Room for the head to rock before it touches the shoulders.
+	const double clearOfBody = std::max(2.5, 0.04 * unit);
+	double lift = 0;
+	for (int it = 0; it < 6; it++) {
+		double gap = 1e300;
+		for (const Mesh& m : headParts) {
+			size_t step = std::max<size_t>(1, m.v.size() / 20000);
+			for (size_t i = 0; i < m.v.size(); i += step) {
+				V3 p = m.v[i] + V3(0, 0, lift);
+				gap = std::min(gap, length(p - torsoBVH.closest(p)));
+			}
+		}
+		if (gap >= clearOfBody) break;
+		lift += clearOfBody - gap + 0.05;
+	}
+	for (Mesh& m : headParts)
+		for (V3& p : m.v) p.z += lift;
+	headBottom += lift;
+
+	// The head on its grid: its centre of mass, and where there is room.
+	std::vector<const Mesh*> headInputs;
+	for (const Mesh& m : headParts) headInputs.push_back(&m);
+	Voxels headGrid = voxelize(headInputs, voxel, log);
+	V3 com;
+	{
+		double count = 0;
+		for (int k = 0; k < headGrid.nz; k += 2)
+			for (int j = 0; j < headGrid.ny; j += 2)
+				for (int i = 0; i < headGrid.nx; i += 2) {
+					V3 q = headGrid.lo + V3(i, j, k) * headGrid.voxel;
+					if (!headGrid.solidAt(q)) continue;
+					com += q;
+					count++;
+				}
+		if (!count) throw std::runtime_error("bobblehead: the head is empty");
+		com = com / count;
+	}
+
+	// The pivot: over the neck, leaning towards the centre of mass, and
+	// above it, with a wall of head all round the hollow.
+	double dx = com.x - cx, dy = com.y - cy, off = std::hypot(dx, dy), most = 0.4 * neckRadius;
+	if (off > most) {
+		dx *= most / off;
+		dy *= most / off;
+	}
+	const double ax = cx + dx, ay = cy + dy;
+	const double Rr = rb + c, apexAbove = Rr / std::sin(alpha), wall = 1.6;
+	// The post and its knob: a cone under the knob (no flatter than alpha)
+	// and a dome on it, which the head rests on; and round them the hollow,
+	// the knob with room round it, a cone over it, and a channel down to the
+	// neck that widens, so the head can rock.
+	struct Pivot {
+		double pz, zk0, zk1;
+	};
+	auto pivotAt = [&](double pz) { Pivot v{pz, 0, pz - 0.5 * rb}; v.zk0 = v.zk1 - (rb - rp) / std::tan(alpha); return v; };
+	const double zPost = neckBase - 3.0;
+	auto knobAt = [=](const Pivot& v) {
+		return [=](const V3& p) {
+			double rho = std::hypot(p.x - ax, p.y - ay), z = p.z;
+			double stem = std::max(rho - rp, std::max(zPost - z, z - v.pz));
+			double cone = std::max((rho - rp - (z - v.zk0) * std::tan(alpha)) * std::cos(alpha), std::max(v.zk0 - z, z - v.zk1));
+			double cyl = std::max(rho - rb, std::max(v.zk1 - z, z - v.pz));
+			double dome = std::hypot(rho, z - v.pz) - rb;
+			return std::min(std::min(stem, cone), std::min(cyl, dome));
+		};
+	};
+	auto hollowAt = [=](const Pivot& v) {
+		auto knob = knobAt(v);
+		const double zApex = v.pz + apexAbove;
+		return [=](const V3& p) {
+			double rho = std::hypot(p.x - ax, p.y - ay);
+			double round = knob(p) - c;
+			double roof = std::max(rho * std::cos(alpha) - (zApex - p.z) * std::sin(alpha), v.pz + Rr * std::sin(alpha) - p.z);
+			double channel =
+			    std::max((rho - (rp + c + std::max(0.0, v.zk0 - p.z) * std::tan(flare))) * std::cos(flare), p.z - v.zk0);
+			return std::min(round, std::min(roof, channel));
+		};
+	};
+	auto fits = [&](const Pivot& v) {
+		auto hollow = hollowAt(v);
+		const double reach = Rr + wall + 0.5, step = 0.5;
+		for (double z = v.zk0; z <= v.pz + apexAbove + wall; z += step)
+			for (double y = ay - reach; y <= ay + reach; y += step)
+				for (double x = ax - reach; x <= ax + reach; x += step) {
+					V3 q(x, y, z);
+					if (hollow(q) <= wall && !headGrid.solidAt(q)) return false;
+				}
+		return true;
+	};
+	Pivot pivot = pivotAt(com.z + 0.12 * unit);
+	while (!fits(pivot) && pivot.pz > com.z + 0.01 * unit) pivot = pivotAt(pivot.pz - 0.005 * unit);
+	if (!fits(pivot)) throw std::runtime_error("bobblehead: no room in the head for the pivot");
+	const double pz = pivot.pz, zk0 = pivot.zk0, zk1 = pivot.zk1, zApex = pz + apexAbove;
+	std::snprintf(buf, sizeof buf,
+	              "Bobblehead: head lifted %.2f, pivot %.2f above its centre of mass, post %.2f thick, knob %.2f, "
+	              "%.2f room round them",
+	              lift, pz - com.z, 2 * rp, 2 * rb, c);
+	log(buf);
+
+	// The neck goes; the post comes up out of the shoulders in its place.
+	keepFaces(body, [&](int f) { return faceTag(body, f) != kTagNeck; });
+	compact(body);
+	fillHoles(body);
+
+	std::vector<std::pair<double, double>> profile{{0, zPost}, {rp, zPost}, {rp, zk0}, {rb, zk1}, {rb, pz}};
+	for (int k = 1; k < 16; k++) {
+		double a = M_PI / 2 * k / 16;
+		profile.push_back({rb * std::cos(a), pz + rb * std::sin(a)});
+	}
+	profile.push_back({0, pz + rb});
+	Mesh post = lathe(profile, ax, ay, 64);
+	Cut hollow;
+	hollow.distance = hollowAt(pivot);
+	const double reach = rb + c + (zk0 - (headBottom - 3)) * std::tan(flare) + 1;
+	hollow.lo = V3(ax - reach, ay - reach, headBottom - 3);
+	hollow.hi = V3(ax + reach, ay + reach, zApex + 1);
+	tick("bobble");
+
+	FuseExtras headExtras;
+	headExtras.cuts.push_back(hollow);
+	Mesh head = contour(headGrid, log, headExtras);
+	headGrid = Voxels();
+	finishWithCuts(head, headExtras.cuts, voxel, o.maxTriangles / 2);
+	std::snprintf(buf, sizeof buf, "Head: %zu triangles", head.f.size());
+	log(buf);
+	tick("fuse head");
+
+	std::vector<Mesh> bodyParts{body, post};
+	if (o.base) bodyParts.push_back(makeBase({body}, unit));
+	std::vector<const Mesh*> bodyInputs;
+	for (const Mesh& m : bodyParts) {
+		bodyInputs.push_back(&m);
+	}
+	Mesh rest = fuse(bodyInputs, voxel, log);
+	smooth(rest, 0.5, 2);
+	dropSpecks(rest, kMinIsland);
+	simplify(rest, o.maxTriangles / 2, voxel * 0.25);
+	std::snprintf(buf, sizeof buf, "Body: %zu triangles", rest.f.size());
+	log(buf);
+	tick("fuse body");
+
+	Mesh all = rest;
+	all.append(head);
+	V3 lo, hi;
+	all.bounds(lo, hi);
+	for (V3& p : all.v) p.z -= lo.z;
+	std::snprintf(buf, sizeof buf, "Printable: head and body in place, %zu faces, %d non-manifold edges", all.f.size(),
+	              countNonManifoldEdges(all));
+	log(buf);
+	return all;
+}
+
+/** A coin or a stamp: the head drawn flat from the front, with lettering. */
+Mesh flatMii(std::vector<Part>& parts, Bytes maskBytes, const Options& o,
+             const std::function<void(const std::string&)>& log, const std::function<void(const char*)>& tick) {
+	Image external;
+	if (maskBytes.size && !external.load(maskBytes.data, maskBytes.size)) log("Warning: could not read the mask PNG");
+	std::vector<FacePart> faceParts;
+	for (Part& p : parts) {
+		bool overlay = has(p.name, "Mask") || has(p.name, "NoseLine") || has(p.name, "Glass") || has(p.name, "Xlu");
+		weld(p.mesh, 0.0001);
+		if (!overlay) subdivide(p.mesh, 2);  // smooth outlines
+		FacePart f;
+		f.name = p.name;
+		f.mesh = &p.mesh;
+		f.texture = has(p.name, "Mask") && !external.empty() ? &external : &p.texture;
+		faceParts.push_back(f);
+	}
+	tick("import and smooth shells");
+
+	// What is drawn, from a quick drawing: its box.
+	double x0, z0, x1, z1;
+	faceBounds(faceParts, x0, z0, x1, z1);
+	if (!(x1 > x0)) throw std::runtime_error("head: nothing to draw");
+	const double unit = x1 - x0;
+	FaceArt rough = drawFace(faceParts, unit / 200, unit / 120, 0);
+	FaceSource source;
+	source.x0 = source.z0 = 1e300;
+	source.x1 = source.z1 = -1e300;
+	for (int j = 0; j < rough.head.h; j++)
+		for (int i = 0; i < rough.head.w; i++)
+			if (rough.head.at(i, j)) {
+				source.x0 = std::min(source.x0, rough.head.cx(i) - rough.head.px);
+				source.x1 = std::max(source.x1, rough.head.cx(i) + rough.head.px);
+				source.z0 = std::min(source.z0, rough.head.cy(j) - rough.head.px);
+				source.z1 = std::max(source.z1, rough.head.cy(j) + rough.head.px);
+			}
+	source.draw = [&](double px, double line, double minWidth) { return drawFace(faceParts, px, line, minWidth); };
+	tick("face art");
+
+	Font font;
+	bool lettered = false;
+	if (!o.text.empty()) {
+		if (o.font.size) lettered = font.load(o.font.data, o.font.size);
+		if (!lettered) log("Warning: no font to letter the text with; leaving it off");
+	}
+	TrinketOptions t;
+	t.make = o.make;
+	t.size = o.size;
+	t.square = o.squareCoin;
+	t.rim = o.rim;
+	t.engraved = o.engraved;
+	t.text = o.text;
+	t.textBelow = o.textBelow;
+	t.border = o.border;
+	t.fit = o.fit;
+	t.assembled = o.assembled;
+	t.maxTriangles = o.maxTriangles;
+	Mesh m = makeTrinket(source, lettered ? &font : nullptr, t, log, tick);
+	char buf[160];
+	std::snprintf(buf, sizeof buf, "Printable: %zu faces, %d non-manifold edges", m.f.size(), countNonManifoldEdges(m));
+	log(buf);
+	return m;
+}
+
 std::vector<uint8_t> exportSTL(const Mesh& m) {
 	aiScene scene;
 	scene.mRootNode = new aiNode();
@@ -662,6 +968,14 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 	char buf[256];
 
 	std::vector<Part> parts = loadHead(headBytes);
+	if (o.make == Make::Coin || o.make == Make::Stamp || o.make == Make::SquareStamp) {
+		Mesh m = flatMii(parts, maskBytes, o, log, tick);
+		std::vector<uint8_t> stl = exportSTL(m);
+		tick("export");
+		return stl;
+	}
+	if (o.make == Make::Bobblehead && o.body != 'm' && o.body != 'f')
+		throw std::runtime_error("bobblehead: it needs a body");
 	std::vector<Part*> glass, masks, opaque;
 	for (Part& p : parts) {
 		if (has(p.name, "NoseLine")) continue;  // a 2D shadow quad
@@ -765,6 +1079,12 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 		displace(b, [&](int) { return unit * kBodyThicken; });
 		hasBody = true;
 		tick("body");
+		if (o.make == Make::Bobblehead) {
+			Mesh all = bobblehead(pieces, b, unit, o, log, tick);
+			std::vector<uint8_t> stl = exportSTL(all);
+			tick("export");
+			return stl;
+		}
 		if (o.split) {
 			Mesh all = splitFigure(pieces, b, body, unit, o, log, tick);
 			std::vector<uint8_t> stl = exportSTL(all);
