@@ -21,7 +21,7 @@ struct Options {
 	Make make = Make::Figure;   // a figure, a bobblehead, a coin, a round or square stamp, or an articulated Mii
 	char body = 0;              // 'm', 'f', or 0 for the head alone
 	int height = 64, build = 64;  // the Mii's own, 0 to 127
-	bool base = true;           // a disc under the feet
+	bool base = true;           // a disc under the feet; the head alone: a flat cut under the chin
 	bool split = false;         // the head, arms, torso and legs as pieces that snap together with pins
 	bool assembled = false;     // split (or a stamp), but every piece left where it goes, for checking
 	double fit = 0;             // millimetres more room (or less, below 0) per side, to suit the printer:

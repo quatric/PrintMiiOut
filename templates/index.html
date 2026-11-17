@@ -4,18 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PrintMiiOut - 3D Print Your Mii, or Print Mii Stickers</title>
-  <meta name="description" content="Turn any Nintendo Mii into a 3D-printable figure, bobblehead, articulated Mii, coin or stamp, or print Mii name stickers and towel and shirt designs. Free, in your browser.">
+  <meta name="description" content="Turn any Nintendo Mii into a 3D-printable figure, head, bobblehead, articulated Mii, coin or stamp, or print Mii name stickers and towel and shirt designs. Free, in your browser.">
   <link rel="canonical" href="https://printmiiout.com/">
   <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="PrintMiiOut">
   <meta property="og:title" content="PrintMiiOut - 3D Print Your Mii, or Print Mii Stickers">
-  <meta property="og:description" content="Turn any Nintendo Mii into a 3D-printable figure, bobblehead, articulated Mii, coin or stamp, or print sheets of Mii name stickers, towels and shirts. Bring an NNID, PNID, Mii file or QR code.">
+  <meta property="og:description" content="Turn any Nintendo Mii into a 3D-printable figure, head, bobblehead, articulated Mii, coin or stamp, or print sheets of Mii name stickers, towels and shirts. Bring an NNID, PNID, Mii file or QR code.">
   <meta property="og:url" content="https://printmiiout.com/">
   <meta property="og:image" content="https://printmiiout.com/static/apple-touch-icon.png">
   <meta name="twitter:card" content="summary">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"WebApplication","name":"PrintMiiOut","url":"https://printmiiout.com/","description":"Turns Nintendo Mii characters into 3D-printable STL models, built in the browser: a figure (whole or as snap-together parts), a print-in-place bobblehead, a flat articulated Mii whose arms and legs swing on print-in-place joints, a coin (round, square or cut to the face's shape), or a round or square ink stamp. It also draws printable PDFs for a regular printer: sheets of Mii name stickers like Wii no Ma's, on sticker paper or Avery label sheets (US Letter and A4), and towel and shirt designs for iron-on transfers. Fetch a Mii by Nintendo Network ID or Pretendo Network ID, or upload a .mii/.ffsd file or a Mii QR code image.","featureList":["3D-printable Mii figures (STL), whole or as snap-together parts", "Print-in-place Mii bobbleheads", "Flat articulated Miis with print-in-place joints", "Mii coins and ink stamps, lettered with the Mii's name", "Mii name sticker sheets (PDF) for sticker paper and Avery label sheets", "Mii towel and shirt designs (PDF) for iron-on transfers"],"applicationCategory":"MultimediaApplication","operatingSystem":"Any","browserRequirements":"Requires JavaScript","inLanguage":"en","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"image":"https://printmiiout.com/static/apple-touch-icon.png","codeRepository":"https://github.com/quatric/PrintMiiOut","license":"https://www.gnu.org/licenses/agpl-3.0.html"}
+  {"@context":"https://schema.org","@type":"WebApplication","name":"PrintMiiOut","url":"https://printmiiout.com/","description":"Turns Nintendo Mii characters into 3D-printable STL models, built in the browser: a figure (whole or as snap-together parts), a print-in-place bobblehead, a flat articulated Mii whose arms and legs swing on print-in-place joints, a coin (round, square or cut to the face's shape), or a round or square ink stamp. It also draws printable PDFs for a regular printer: sheets of Mii name stickers like Wii no Ma's, on sticker paper or Avery label sheets (US Letter and A4), and towel and shirt designs for iron-on transfers. Fetch a Mii by Nintendo Network ID or Pretendo Network ID, or upload a .mii/.ffsd file or a Mii QR code image.","featureList":["3D-printable Mii figures (STL), whole or as snap-together parts", "3D-printable Mii heads on their own", "Print-in-place Mii bobbleheads", "Flat articulated Miis with print-in-place joints", "Mii coins and ink stamps, lettered with the Mii's name", "Mii name sticker sheets (PDF) for sticker paper and Avery label sheets", "Mii towel and shirt designs (PDF) for iron-on transfers"],"applicationCategory":"MultimediaApplication","operatingSystem":"Any","browserRequirements":"Requires JavaScript","inLanguage":"en","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"image":"https://printmiiout.com/static/apple-touch-icon.png","codeRepository":"https://github.com/quatric/PrintMiiOut","license":"https://www.gnu.org/licenses/agpl-3.0.html"}
   </script>
   <meta name="theme-color" content="#eeeeee" id="theme-color">
   <script>
@@ -514,6 +514,7 @@
             <span class="label" id="make-label">Make</span>
             <div class="gender-row" role="group" aria-labelledby="make-label">
               <button class="gender-btn selected" data-make="figure"       type="button" aria-pressed="true">Figure</button>
+              <button class="gender-btn"          data-make="head"         type="button" aria-pressed="false">Head</button>
               <button class="gender-btn"          data-make="bobblehead"   type="button" aria-pressed="false">Bobblehead</button>
               <button class="gender-btn"          data-make="articulated"  type="button" aria-pressed="false">Articulated</button>
               <button class="gender-btn"          data-make="coin"         type="button" aria-pressed="false">Coin</button>
@@ -625,11 +626,11 @@
               <button class="gender-btn"          data-pieces="split" type="button" aria-pressed="false">Snap-together parts</button>
             </div>
           </div>
-          <div class="field" id="base-field" data-makes="figure bobblehead">
+          <div class="field" id="base-field" data-makes="figure bobblehead head">
             <span class="label" id="base-label">Base</span>
             <div class="gender-row" role="group" aria-labelledby="base-label">
-              <button class="gender-btn selected" data-base="on"  type="button" aria-pressed="true">With base</button>
-              <button class="gender-btn"          data-base="off" type="button" aria-pressed="false">No base</button>
+              <button class="gender-btn selected" data-base="on"  type="button" aria-pressed="true" id="base-on">With base</button>
+              <button class="gender-btn"          data-base="off" type="button" aria-pressed="false" id="base-off">No base</button>
             </div>
           </div>
           <div class="field" data-makes="coin" hidden>
@@ -885,6 +886,9 @@
   const PRINTS = ['stickers', 'towel', 'shirt'];
   const MAKES = {
     'figure': { note: '' },
+    'head': {
+      note: 'Just the head, in 3D, with the face embossed and glasses as on the figure. It stands on a flat cut under the chin.',
+    },
     'bobblehead': {
       note: 'The head hangs on a ball that prints inside it, so it nods straight off the printer. Print with supports under the head, then wiggle it gently to free the ball.',
       fit: 'Pivot fit',
@@ -937,6 +941,11 @@
     note.hidden = !m.note;
     const split = choice.make === 'figure' && choice.pieces === 'split';
     document.getElementById('pieces-note').hidden = !split;
+    // The head alone stands on a flat cut instead of a base.
+    const head = choice.make === 'head';
+    document.getElementById('base-label').textContent = head ? 'Bottom' : 'Base';
+    document.getElementById('base-on').textContent = head ? 'Flat, to stand' : 'With base';
+    document.getElementById('base-off').textContent = head ? 'Round' : 'No base';
     document.getElementById('fit-field').hidden = !(split || m.fit);
     document.getElementById('fit-label').textContent = split ? 'Pin fit' : m.fit || 'Pin fit';
     document.getElementById('fit-note').innerHTML = (split ? PIN_FIT_NOTE : m.fitNote || PIN_FIT_NOTE) + ' Remembered for your next Mii.';

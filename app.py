@@ -238,6 +238,7 @@ LLMS_TXT = f"""# PrintMiiOut (printmiiout.com)
 - The figure prints as one piece by default, or as snap-together parts: the head, torso, arms and legs (with or without the base) print separately and press together on pins with crush ribs, like building bricks. A "Pin fit" slider loosens or tightens every pin for the visitor's printer.
 - The body follows the Mii's own height and build, scaled bone by bone as Nintendo's editor scales it, with arms and legs held thick enough to print. An "Average" option uses the middle height and build instead.
 - Besides a figure it makes:
+  - the head alone in 3D, standing on a flat cut under the chin;
   - a print-in-place bobblehead: the head hangs on a ball-ended post rising from the body, captured inside the head as it prints, so it nods without assembly;
   - a flat articulated Mii, drawn from the front like a paper doll, whose arms and legs swing on joints that print in place (each limb's knob prints already captured in a ring on the body), with no supports or assembly;
   - a coin or token with the face drawn flat (round, rounded square, or cut to the outline of the face, with or without a rim, raised or engraved), lettered with the Mii's name or any text in Rodin NTLG;
@@ -272,7 +273,7 @@ def llms_txt():
     return _text(LLMS_TXT, "text/plain")
 
 
-MAKES = ("figure", "bobblehead", "articulated", "coin", "stamp", "square_stamp", "stickers", "towel", "shirt")
+MAKES = ("figure", "head", "bobblehead", "articulated", "coin", "stamp", "square_stamp", "stickers", "towel", "shirt")
 FLAT_MAKES = ("coin", "stamp", "square_stamp")
 # Printed on paper rather than a 3D printer: the browser draws a PDF.
 PRINT_MAKES = ("stickers", "towel", "shirt")
@@ -451,6 +452,9 @@ def resolve():
             text_pos=c["text_pos"],
             border=c["border"],
         )
+    elif c["make"] == "head":
+        # The head alone: no body, and a flat cut under the chin for "base".
+        job.update(body=None, height=miidata.AVERAGE, build=miidata.AVERAGE, split=False, base=c["base"])
     else:
         body_type, height, build = _body_for(raw, c["body_type"], c["proportions"])
         job.update(

@@ -38,6 +38,9 @@ const double kBodyThicken = 0.006;
 const double kMinLimbRadius = 0.03;
 const double kBodySeamWeld = 0.003;
 const double kMinIsland = 0.01;
+// How far above the chin a head printed alone is cut flat, so it stands
+// (a fraction of the head's width).
+const double kHeadFlat = 0.03;
 // How deep the neck's pin goes into the torso and into the head, at least
 // (millimetres at 100% scale).
 const double kNeckSocketDepth = 6.0;
@@ -1106,6 +1109,10 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 	const Mesh* faceline = nullptr;
 	for (Part* p : opaque)
 		if (p->name == "OpaFaceline") faceline = &p->mesh;
+	// The chin: where a head printed alone is cut flat to stand.
+	double chinZ = 1e300;
+	if (faceline)
+		for (const V3& v : faceline->v) chinZ = std::min(chinZ, v.z);
 	std::unique_ptr<BVH> facelineBVH;
 	if (faceline) facelineBVH = std::make_unique<BVH>(*faceline);
 	std::vector<Mesh> pieces;
@@ -1199,23 +1206,52 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 
 	if (hasBody && o.base) pieces.push_back(makeBase(pieces, unit));
 
+	// The head alone stands on a flat cut under the chin instead of a base.
+	FuseExtras extras;
+	if (!hasBody && o.base) {
+		V3 lo(1e300, 1e300, 1e300), hi(-1e300, -1e300, -1e300);
+		for (const Mesh& m : pieces) {
+			V3 a, b;
+			m.bounds(a, b);
+			lo = vmin(lo, a);
+			hi = vmax(hi, b);
+		}
+		// Level with the chin, so it stands upright like a bust; hair
+		// hanging lower behind is cut off with it.
+		const double zCut = (chinZ < 1e299 ? std::max(chinZ, lo.z) : lo.z) + kHeadFlat * unit;
+		Cut flat;
+		flat.distance = [zCut](const V3& p) { return p.z - zCut; };
+		flat.lo = V3(lo.x - unit, lo.y - unit, lo.z - unit);
+		flat.hi = V3(hi.x + unit, hi.y + unit, zCut + 0.05 * unit);
+		extras.cuts.push_back(flat);
+		std::snprintf(buf, sizeof buf, "Flat bottom: cut %.1f%% of the head's height up", 100 * (zCut - lo.z) / (hi.z - lo.z));
+		log(buf);
+	}
+
 	std::vector<const Mesh*> refs;
 	for (const Mesh& m : pieces) refs.push_back(&m);
 	const double voxel = unit / o.voxelsPerHead;
-	Mesh solid = fuse(refs, voxel, log);
+	Mesh solid = fuse(refs, voxel, log, extras);
 	pieces.clear();
 	std::snprintf(buf, sizeof buf, "Fused: %zu triangles", solid.f.size());
 	log(buf);
 	tick("fuse");
 
-	// Voxels leave a stair-step on feature edges; two passes sand it off.
-	smooth(solid, 0.5, 2);
-	tick("sand");
-	int dropped = dropSpecks(solid, kMinIsland);
-	std::snprintf(buf, sizeof buf, "Dropped %d specks", dropped);
-	log(buf);
-	tick("specks");
-	simplify(solid, o.maxTriangles, voxel * 0.25);
+	if (!extras.cuts.empty()) {
+		// Sanded and slimmed like the rest, the flat cut kept flat.
+		finishWithCuts(solid, extras.cuts, voxel, o.maxTriangles);
+		tick("sand");
+		tick("specks");
+	} else {
+		// Voxels leave a stair-step on feature edges; two passes sand it off.
+		smooth(solid, 0.5, 2);
+		tick("sand");
+		int dropped = dropSpecks(solid, kMinIsland);
+		std::snprintf(buf, sizeof buf, "Dropped %d specks", dropped);
+		log(buf);
+		tick("specks");
+		simplify(solid, o.maxTriangles, voxel * 0.25);
+	}
 	std::snprintf(buf, sizeof buf, "Printable: %zu faces, %d non-manifold edges", solid.f.size(),
 	              countNonManifoldEdges(solid));
 	log(buf);
