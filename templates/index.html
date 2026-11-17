@@ -916,6 +916,7 @@
   const PIN_FIT_NOTE = 'Pins too hard to press in? Go looser. Slipping out? Go tighter. Each step gives every pin and the neck 0.05&nbsp;mm more or less room all round.';
   const sizeInput = document.getElementById('size');
   const sizes = {};  // what was typed for each make
+  const fits = {};   // the fit set for each make, and for split figures' pins
   const textInput = document.getElementById('text');
 
   function showChoices() {
@@ -931,7 +932,7 @@
     document.getElementById('fit-field').hidden = !(split || m.fit);
     document.getElementById('fit-label').textContent = split ? 'Pin fit' : m.fit || 'Pin fit';
     document.getElementById('fit-note').innerHTML = (split ? PIN_FIT_NOTE : m.fitNote || PIN_FIT_NOTE) + ' Remembered for your next Mii.';
-    showFit();
+    loadFit();
     if (m.size) {
       const [lo, hi, usual] = m.size;
       sizeInput.min = lo;
@@ -1134,6 +1135,21 @@
 
   // ── Pin fit, which depends on the printer, so it is kept for next time ────
   const fitInput = document.getElementById('fit');
+  // Pins, the bobblehead's ball and the stamps' caps start from different
+  // clearances, so one make's fit would be wrong for another.
+  function fitKey() {
+    return choice.make === 'figure' && choice.pieces === 'split' ? 'pins' : choice.make;
+  }
+  function loadFit() {
+    const key = fitKey();
+    if (!(key in fits)) {
+      let saved = null;
+      try { saved = localStorage.getItem(`printmiiout-fit-${key}`); } catch (_) {}
+      fits[key] = saved !== null && Number.isFinite(parseFloat(saved)) ? saved : String(MAKES[choice.make].recommend || 0);
+    }
+    document.getElementById('fit').value = fits[key];
+    showFit();
+  }
   function showFit() {
     const input = document.getElementById('fit');
     const v = Math.round(parseFloat(input.value) * 100) / 100;
@@ -1155,14 +1171,10 @@
     fitInput.dispatchEvent(new Event('input'));
     fitInput.focus();
   });
-  try {
-    const saved = localStorage.getItem('printmiiout-fit');
-    if (saved !== null && Number.isFinite(parseFloat(saved))) fitInput.value = saved;
-  } catch (_) {}
-  showFit();
   fitInput.addEventListener('input', () => {
+    fits[fitKey()] = fitInput.value;
     showFit();
-    try { localStorage.setItem('printmiiout-fit', fitInput.value); } catch (_) {}
+    try { localStorage.setItem(`printmiiout-fit-${fitKey()}`, fitInput.value); } catch (_) {}
   });
 
   // ── Submit ────────────────────────────────────────────────────────────────
