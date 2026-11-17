@@ -88,6 +88,60 @@ export class Painter {
 	text() { return this.ops.join('\n'); }
 }
 
+const CAPS = ['butt', 'round', 'square'];
+
+/**
+ * Plays a painter's operations on a 2D canvas, which transforms, builds
+ * paths and keeps its state the way PDF does. bitmaps and shapes map the
+ * names drawn with Do to an ImageBitmap or a shape.
+ */
+function paint(ctx, ops, bitmaps, shapes) {
+	const css = (t) => `rgb(${Math.round(t[0] * 255)}, ${Math.round(t[1] * 255)}, ${Math.round(t[2] * 255)})`;
+	ctx.beginPath();
+	for (const op of ops) {
+		if (op === 'W n') { ctx.clip(); ctx.beginPath(); continue; }
+		const t = op.split(' ');
+		const name = t.pop();
+		const n = t.map(Number);
+		switch (name) {
+			case 'q': ctx.save(); break;
+			case 'Q': ctx.restore(); break;
+			case 'cm': ctx.transform(n[0], n[1], n[2], n[3], n[4], n[5]); break;
+			case 'rg': ctx.fillStyle = css(n); break;
+			case 'RG': ctx.strokeStyle = css(n); break;
+			case 'w': ctx.lineWidth = n[0]; break;
+			case 'J': ctx.lineCap = CAPS[n[0]] || 'butt'; break;
+			case 'd': {
+				const m = /^\[([^\]]*)\]\s+(\S+)/.exec(op);
+				ctx.setLineDash(m && m[1].trim() ? m[1].trim().split(/\s+/).map(Number) : []);
+				ctx.lineDashOffset = m ? Number(m[2]) : 0;
+				break;
+			}
+			case 'm': ctx.moveTo(n[0], n[1]); break;
+			case 'l': ctx.lineTo(n[0], n[1]); break;
+			case 'c': ctx.bezierCurveTo(n[0], n[1], n[2], n[3], n[4], n[5]); break;
+			case 'h': ctx.closePath(); break;
+			case 're': ctx.rect(n[0], n[1], n[2], n[3]); break;
+			case 'f': ctx.fill('nonzero'); ctx.beginPath(); break;
+			case 'f*': ctx.fill('evenodd'); ctx.beginPath(); break;
+			case 'S': ctx.stroke(); ctx.beginPath(); break;
+			case 'Do': {
+				const key = t[0].slice(1);
+				const bitmap = bitmaps.get(key);
+				ctx.save();
+				if (bitmap) {
+					// The image's top row is at the top of its unit square.
+					ctx.transform(1, 0, 0, -1, 0, 1);
+					ctx.drawImage(bitmap, 0, 0, 1, 1);
+				} else if (shapes.has(key)) paint(ctx, shapes.get(key).painter.ops, bitmaps, shapes);
+				ctx.restore();
+				ctx.beginPath();
+				break;
+			}
+		}
+	}
+}
+
 /** A PDF document of pages, images and reusable shapes. */
 export class PdfDocument {
 	constructor() {
@@ -125,6 +179,45 @@ export class PdfDocument {
 	/** A page w by h mm; painter draws on it in mm, y down from the top left. */
 	addPage(w, h, painter) {
 		this.pages.push({ w, h, painter });
+	}
+
+	/**
+	 * Pictures of the first max pages, each a PNG Blob width pixels across,
+	 * drawn on an OffscreenCanvas; none where the browser has no
+	 * OffscreenCanvas (it is only a preview).
+	 */
+	async previews(width = 1200, max = 4) {
+		if (typeof OffscreenCanvas === 'undefined' || typeof createImageBitmap !== 'function') return [];
+		const bitmaps = new Map();
+		for (const im of this.images) {
+			const n = im.width * im.height;
+			const rgba = new Uint8ClampedArray(n * 4);
+			for (let i = 0; i < n; i++) {
+				const c = im.gray ? [im.color[i], im.color[i], im.color[i]] : [im.color[i * 3], im.color[i * 3 + 1], im.color[i * 3 + 2]];
+				rgba[i * 4] = c[0]; rgba[i * 4 + 1] = c[1]; rgba[i * 4 + 2] = c[2];
+				rgba[i * 4 + 3] = im.alpha ? im.alpha[i] : 255;
+			}
+			bitmaps.set(im.name, await createImageBitmap(new ImageData(rgba, im.width, im.height)));
+		}
+		const shapes = new Map(this.shapes.map(s => [s.name, s]));
+		const out = [];
+		try {
+			for (const page of this.pages.slice(0, max)) {
+				const scale = width / page.w;
+				const canvas = new OffscreenCanvas(Math.round(page.w * scale), Math.round(page.h * scale));
+				const ctx = canvas.getContext('2d');
+				if (!ctx) return [];
+				ctx.fillStyle = '#ffffff';
+				ctx.fillRect(0, 0, canvas.width, canvas.height);
+				ctx.imageSmoothingQuality = 'high';
+				ctx.setTransform(scale, 0, 0, scale, 0, 0);
+				paint(ctx, page.painter.ops, bitmaps, shapes);
+				out.push(await canvas.convertToBlob({ type: 'image/png' }));
+			}
+		} finally {
+			for (const b of bitmaps.values()) b.close();
+		}
+		return out;
 	}
 
 	async build({ title = '', creator = '' } = {}) {

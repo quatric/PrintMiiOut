@@ -1,6 +1,6 @@
 // Printed things, as PDFs: sticker sheets after Wii no Ma's Mii name
 // stickers (Miiのお名前シール), on sticker paper or on any of the label
-// sheets The Print Shop 4 supports, and a towel and a tote bag after the
+// sheets The Print Shop 4 supports, and a towel and a shirt after the
 // ones printed with a Mii stamp's line art.
 //
 // Everything is drawn in millimetres, y down. Names are the glyph outlines
@@ -24,7 +24,7 @@ export const THEMES = {
 	mono: { a: '#e3e3e3', b: '#c6c6c6', c: '#a9a9a9', d: '#d4d4d4', e: '#ececec', text: '#000000', accent: '#000000', gray: true },
 };
 
-/** Ink colours for line-art faces, the towel and the tote: Shachihata's
+/** Ink colours for line-art faces, the towel and the shirt: Shachihata's
  *  stamp inks as its Mii stamps showed them, and pink. */
 export const INKS = {
 	blue: '#1f47c4',
@@ -337,8 +337,7 @@ function templateItem(art, p, it, o, unit) {
 	const { x, y, w, h } = it;
 	const text = o.text;
 	if (it.k === 'header') {
-		L.horizontal(p, 'Miiのお名前シール', x, y + 26, 24, 230, th.text, 'left');
-		L.horizontal(p, 'NAME STICKERS', x + 2, y + 47, 10, 120, th.accent, 'left');
+		L.horizontal(p, 'Mii Stickers', x, y + 31, 30, 230, th.text, 'left');
 		if (text) L.horizontal(p, text, x + w, y + 22, 13, 190, th.accent, 'right');
 		if (o.date) L.horizontal(p, o.date, x + w, y + 42, 10, 190, th.accent, 'right');
 		return;
@@ -555,10 +554,15 @@ export async function makeStickers(core, font, face, options) {
 		drawTemplate(art, p, TEMPLATE, { x: m, y: m, w: pw - 2 * m, h: ph - 2 * m }, o);
 	}
 	art.doc.addPage(pw, ph, p);
-	return art.doc.build({ title: 'Mii name stickers', creator: 'PrintMiiOut (printmiiout.com)' });
+	return finish(art.doc, 'Mii Stickers');
 }
 
-// ── Towel and tote bag ────────────────────────────────────────────────────
+/** The PDF, and the document it came from, to draw a preview with. */
+async function finish(doc, title) {
+	return { doc, pdf: await doc.build({ title, creator: 'PrintMiiOut (printmiiout.com)' }) };
+}
+
+// ── Towel and shirt ───────────────────────────────────────────────────────
 
 /** Flips the page left to right, for iron-on transfer paper. */
 function mirrored(p, pw, mirror) {
@@ -597,14 +601,14 @@ export async function makeTowel(core, font, face, options) {
 	if (text) art.letters.horizontal(p, text.toUpperCase(), fx - side * 0.012, fy + fs * 0.6, fs * 0.2, side * 0.3, gray, 'right');
 	p.restore();
 	art.doc.addPage(pw, ph, p);
-	return art.doc.build({ title: 'Mii towel', creator: 'PrintMiiOut (printmiiout.com)' });
+	return finish(art.doc, 'Mii towel');
 }
 
 /**
- * A tote bag's badge: a ring in the ink lettered in white along the top
+ * A shirt's print: a ring in the ink lettered in white along the top
  * and the bottom, two dots between, and the face in the middle.
  */
-export async function makeTote(core, font, face, options) {
+export async function makeShirt(core, font, face, options) {
 	const ink = INKS[options.ink] || INKS.blue;
 	const art = new Art(core, font, { drawn: face.drawn, photo: face.photo && prepareImage(face.photo.width, face.photo.height, face.photo.rgba, 900), ink });
 	const [pw, ph] = PAPERS[options.paper] || PAPERS.letter;
@@ -626,5 +630,5 @@ export async function makeTote(core, font, face, options) {
 	art.face(p, cx - f / 2, cy - f / 2, f, f);
 	p.restore();
 	art.doc.addPage(pw, ph, p);
-	return art.doc.build({ title: 'Mii tote bag', creator: 'PrintMiiOut (printmiiout.com)' });
+	return finish(art.doc, 'Mii shirt');
 }

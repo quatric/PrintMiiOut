@@ -220,7 +220,7 @@ SITEMAP_XML = (
 
 LLMS_TXT = f"""# PrintMiiOut (printmiiout.com)
 
-> A free web tool that turns a Nintendo Mii into a 3D-printable STL file. It fetches the Mii and builds a head and body right in the visitor's browser (C++ compiled to WebAssembly), then hands over an STL for a slicer.
+> A free web tool that turns a Nintendo Mii into a 3D-printable STL file: a figure, a bobblehead, a coin or a name stamp. It fetches the Mii and builds the model right in the visitor's browser (C++ compiled to WebAssembly), then hands over an STL for a slicer. It also draws printable PDFs for a regular printer: sheets of Mii name stickers, and towel and shirt designs.
 
 ## Using it
 
@@ -234,8 +234,8 @@ LLMS_TXT = f"""# PrintMiiOut (printmiiout.com)
   - a round self-inking-style name stamp for an ink pad: a bullet-shaped grip, a face plug that prints face up and presses into it, and a cap;
   - a square stamp with a domed top showing the design, a face plate, two pins and a cap.
 - For a regular printer it draws PDFs:
-  - a sheet of name stickers after Wii no Ma's Mii sticker shop (Miiのお名前シール), in six colour schemes, with the face in colour or as a stamp's line art, on sticker paper or fitted to any of the Avery label sheets The Print Shop 4 supports (US Letter and A4);
-  - a towel design (a field of dots with the face and name in the corner) and a tote bag badge (the face in a ring lettered with the name), in Shachihata's stamp ink colours or pink, mirrored for iron-on transfers if wanted.
+  - a sheet of name stickers after Wii no Ma's Mii sticker shop (Miiのお名前シール), in six colour schemes, with the face in colour or as a stamp's line art, on sticker paper or fitted to dozens of Avery label sheets (US Letter and A4: round, square, oval, address, shipping and name badge labels);
+  - a towel design (a field of dots with the face and name in the corner) and a shirt print (the face in a ring lettered with the name), in Shachihata's stamp ink colours or pink, mirrored for iron-on transfers if wanted.
 
 ## Source
 
@@ -262,10 +262,10 @@ def llms_txt():
     return _text(LLMS_TXT, "text/plain")
 
 
-MAKES = ("figure", "bobblehead", "coin", "stamp", "square_stamp", "stickers", "towel", "tote")
+MAKES = ("figure", "bobblehead", "coin", "stamp", "square_stamp", "stickers", "towel", "shirt")
 FLAT_MAKES = ("coin", "stamp", "square_stamp")
 # Printed on paper rather than a 3D printer: the browser draws a PDF.
-PRINT_MAKES = ("stickers", "towel", "tote")
+PRINT_MAKES = ("stickers", "towel", "shirt")
 TEXT_MAX = 32
 
 

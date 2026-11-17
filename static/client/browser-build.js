@@ -5,50 +5,50 @@
 
 // The core's stages, as it reports them, and what to tell the user next.
 const NEXT_STAGE = {
-	'import and smooth shells': 'Embossing the face…',
-	'emboss face features': 'Joining the head…',
-	'merge head': 'Fitting the glasses…',
-	'glasses': 'Posing the body…',
-	'body': 'Fusing everything into one solid…',
-	'fuse': 'Smoothing…',
-	'sand': 'Tidying up…',
-	'specks': 'Slimming the mesh down…',
-	'tidy': 'Writing the STL…',
+	'import and smooth shells': 'Embossing the face...',
+	'emboss face features': 'Joining the head...',
+	'merge head': 'Fitting the glasses...',
+	'glasses': 'Posing the body...',
+	'body': 'Fusing everything into one solid...',
+	'fuse': 'Smoothing...',
+	'sand': 'Tidying up...',
+	'specks': 'Slimming the mesh down...',
+	'tidy': 'Writing the STL...',
 };
 // Printing in pieces, the body is cut up and each piece made on its own.
 const NEXT_SPLIT_STAGE = {
 	...NEXT_STAGE,
-	'body': 'Cutting the figure into pieces…',
-	'split body': 'Fitting the pins…',
-	'voxelize': 'Making the head…',
-	'fuse head': 'Making the arms…',
-	'fuse arms': 'Making the torso…',
-	'fuse torso': 'Making the legs…',
-	'fuse legs': 'Smoothing…',
+	'body': 'Cutting the figure into pieces...',
+	'split body': 'Fitting the pins...',
+	'voxelize': 'Making the head...',
+	'fuse head': 'Making the arms...',
+	'fuse arms': 'Making the torso...',
+	'fuse torso': 'Making the legs...',
+	'fuse legs': 'Smoothing...',
 };
 // A bobblehead: the head and the body are made apart, joined by a pivot.
 const NEXT_BOBBLE_STAGE = {
 	...NEXT_STAGE,
-	'body': 'Fitting the pivot…',
-	'bobble': 'Making the head…',
-	'fuse head': 'Making the body…',
-	'fuse body': 'Writing the STL…',
+	'body': 'Fitting the pivot...',
+	'bobble': 'Making the head...',
+	'fuse head': 'Making the body...',
+	'fuse body': 'Writing the STL...',
 };
 // Coins and stamps: the face drawn flat, then carved.
 const NEXT_FLAT_STAGE = {
-	'import and smooth shells': 'Drawing the face…',
-	'face art': 'Laying out the design…',
-	'design': 'Carving…',
-	'carve': 'Writing the STL…',
-	'carve the face': 'Shaping the handle…',
-	'shape the grip': 'Shaping the cap…',
-	'shape the base': 'Shaping the top…',
-	'shape the top': 'Shaping the cap…',
-	'shape the cap': 'Writing the STL…',
+	'import and smooth shells': 'Drawing the face...',
+	'face art': 'Laying out the design...',
+	'design': 'Carving...',
+	'carve': 'Writing the STL...',
+	'carve the face': 'Shaping the handle...',
+	'shape the grip': 'Shaping the cap...',
+	'shape the base': 'Shaping the top...',
+	'shape the top': 'Shaping the cap...',
+	'shape the cap': 'Writing the STL...',
 };
 const FLAT = new Set(['coin', 'stamp', 'square-stamp']);
 // Printed on paper: the browser draws a PDF.
-export const PRINTS = new Set(['stickers', 'towel', 'tote']);
+export const PRINTS = new Set(['stickers', 'towel', 'shirt']);
 // Rodin NTLG Pro B, cut down to the characters a name or a label uses.
 const FONT = new URL('../fonts/RodinNTLGPro-B-print.otf', import.meta.url);
 
@@ -86,7 +86,7 @@ function inWorker(message, transfer, onLog) {
 }
 
 /**
- * Stickers, a towel or a tote bag as a PDF. job: what /resolve said;
+ * Stickers, a towel or a shirt as a PDF. job: what /resolve said;
  * print: the page's choices (paper, label, theme, faceStyle, ink and its
  * colour, outlines, mirror).
  */
@@ -98,10 +98,10 @@ async function buildPrint(job, print, onStatus) {
 		drawn ? fetchBytes(job.png, 'the face texture') : null,
 		fetchBytes(FONT, 'the font'),
 	]);
-	onStatus(job.make === 'stickers' ? 'Laying out your stickers…' : 'Drawing the design…');
+	onStatus(job.make === 'stickers' ? 'Laying out your stickers...' : 'Drawing the design...');
 	const transfer = [font.buffer];
 	for (const b of [photo, head, mask]) if (b) transfer.push(b.buffer);
-	const { pdf } = await inWorker({
+	const { pdf, previews, pages } = await inWorker({
 		print: {
 			make: job.make,
 			photo: photo && photo.buffer,
@@ -111,17 +111,19 @@ async function buildPrint(job, print, onStatus) {
 			options: { ...print, text: job.text || '' },
 		},
 	}, transfer);
-	return new Blob([pdf], { type: 'application/pdf' });
+	return { file: new Blob([pdf], { type: 'application/pdf' }), previews: previews || [], pages: pages || 1 };
 }
 
 /**
  * form: the page's FormData, which /resolve reads. onStatus(text) hears
  * progress. print: the choices for something printed on paper.
- * Resolves to a Blob holding a binary STL, or a PDF for stickers, a towel
- * or a tote bag.
+ * Resolves to { file, previews, pages }: file is a Blob holding a binary
+ * STL, or a PDF for stickers, a towel or a shirt; previews are PNG Blobs
+ * of the PDF's first pages (none for an STL, or where the browser cannot
+ * draw them), and pages how many the PDF has.
  */
 export async function buildInBrowser(form, onStatus, print = {}) {
-	onStatus('Looking up your Mii…');
+	onStatus('Looking up your Mii...');
 	const res = await fetch('/resolve', { method: 'POST', body: form });
 	let job;
 	try {
@@ -131,7 +133,7 @@ export async function buildInBrowser(form, onStatus, print = {}) {
 	}
 	if (!res.ok) throw new Error(job.error || 'Server error.');
 
-	onStatus('Downloading your Mii…');
+	onStatus('Downloading your Mii...');
 	const here = new URL('./', import.meta.url);
 	const make = job.make || 'figure';
 	if (PRINTS.has(make)) return buildPrint(job, print, onStatus);
@@ -144,7 +146,7 @@ export async function buildInBrowser(form, onStatus, print = {}) {
 		lettered ? fetchBytes(FONT, 'the font') : null,
 	]);
 
-	onStatus('Building your Mii in this browser…');
+	onStatus('Building your Mii in this browser...');
 	const stages = flat ? NEXT_FLAT_STAGE
 		: make === 'bobblehead' ? NEXT_BOBBLE_STAGE
 		: job.split && job.body ? NEXT_SPLIT_STAGE : NEXT_STAGE;
@@ -176,5 +178,5 @@ export async function buildInBrowser(form, onStatus, print = {}) {
 		const stage = /^\[\s*[\d.]+s\] (.+?): /.exec(line);
 		if (stage && stages[stage[1]]) onStatus(stages[stage[1]]);
 	});
-	return new Blob([stl], { type: 'model/stl' });
+	return { file: new Blob([stl], { type: 'model/stl' }), previews: [], pages: 0 };
 }

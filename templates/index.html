@@ -3,19 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PrintMiiOut - 3D Print Your Mii</title>
-  <meta name="description" content="Turn any Nintendo Mii into a 3D-printable STL file. Enter an NNID or PNID, or upload a Mii file or QR code, and download a model ready for your slicer. Free.">
+  <title>PrintMiiOut - 3D Print Your Mii, or Print Mii Stickers</title>
+  <meta name="description" content="Turn any Nintendo Mii into a 3D-printable figure, bobblehead, coin or stamp, or print Mii name stickers and towel and shirt designs. Free, in your browser.">
   <link rel="canonical" href="https://printmiiout.com/">
   <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="PrintMiiOut">
-  <meta property="og:title" content="PrintMiiOut - 3D Print Your Mii">
-  <meta property="og:description" content="Turn any Nintendo Mii into a 3D-printable STL file. Enter an NNID or PNID, or upload a Mii file or QR code.">
+  <meta property="og:title" content="PrintMiiOut - 3D Print Your Mii, or Print Mii Stickers">
+  <meta property="og:description" content="Turn any Nintendo Mii into a 3D-printable figure, bobblehead, coin or stamp, or print sheets of Mii name stickers, towels and shirts. Bring an NNID, PNID, Mii file or QR code.">
   <meta property="og:url" content="https://printmiiout.com/">
   <meta property="og:image" content="https://printmiiout.com/static/apple-touch-icon.png">
   <meta name="twitter:card" content="summary">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"WebApplication","name":"PrintMiiOut","url":"https://printmiiout.com/","description":"Converts Nintendo Mii characters into 3D-printable STL models. Fetch a Mii by Nintendo Network ID or Pretendo Network ID, or upload a .mii/.ffsd file or a Mii QR code image.","applicationCategory":"MultimediaApplication","operatingSystem":"Any","browserRequirements":"Requires JavaScript","inLanguage":"en","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"image":"https://printmiiout.com/static/apple-touch-icon.png","codeRepository":"https://github.com/quatric/PrintMiiOut","license":"https://www.gnu.org/licenses/agpl-3.0.html"}
+  {"@context":"https://schema.org","@type":"WebApplication","name":"PrintMiiOut","url":"https://printmiiout.com/","description":"Turns Nintendo Mii characters into 3D-printable STL models, built in the browser: a figure (whole or as snap-together parts), a print-in-place bobblehead, a coin, or a round or square ink stamp. It also draws printable PDFs for a regular printer: sheets of Mii name stickers like Wii no Ma's, on sticker paper or Avery label sheets (US Letter and A4), and towel and shirt designs for iron-on transfers. Fetch a Mii by Nintendo Network ID or Pretendo Network ID, or upload a .mii/.ffsd file or a Mii QR code image.","featureList":["3D-printable Mii figures (STL), whole or as snap-together parts", "Print-in-place Mii bobbleheads", "Mii coins and ink stamps, lettered with the Mii's name", "Mii name sticker sheets (PDF) for sticker paper and Avery label sheets", "Mii towel and shirt designs (PDF) for iron-on transfers"],"applicationCategory":"MultimediaApplication","operatingSystem":"Any","browserRequirements":"Requires JavaScript","inLanguage":"en","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"image":"https://printmiiout.com/static/apple-touch-icon.png","codeRepository":"https://github.com/quatric/PrintMiiOut","license":"https://www.gnu.org/licenses/agpl-3.0.html"}
   </script>
   <meta name="theme-color" content="#eeeeee" id="theme-color">
   <script>
@@ -256,7 +256,7 @@
     #qr-status[data-state="ok"]::before { content: ""; display: inline-block; width: 10px; height: 10px; background: var(--leaf); margin-right: 8px; box-shadow: 0 0 0 2px var(--ink); }
     #qr-status[data-state="error"] { color: var(--ink); text-decoration: underline wavy; text-underline-offset: 4px; }
 
-    .options { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .options { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
     .options .field-wide { grid-column: 1 / -1; margin-top: 0; }
     .options .pieces-note { margin-top: -12px; }
     .options .field { margin-top: 0; }
@@ -275,6 +275,18 @@
     input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 24px; margin-top: -8px; border: none; border-radius: 0; background: var(--leaf); box-shadow: 0 0 0 3px var(--ink); }
     input[type="range"]::-moz-range-thumb { width: 16px; height: 24px; border: none; border-radius: 0; background: var(--leaf); box-shadow: 0 0 0 3px var(--ink); }
     .fit-ends { display: flex; justify-content: space-between; font-size: 0.84rem; color: var(--soft); margin-top: 6px; }
+    /* Under the slider where the recommended setting is; it sets it. */
+    .fit-mark {
+      position: relative; display: inline-block; left: var(--at, 50%); transform: translateX(-50%);
+      margin-top: 4px; padding: 8px 4px 0; border: none; background: none; cursor: pointer;
+      font: inherit; font-size: 0.84rem; font-weight: 700; color: var(--ink);
+    }
+    .fit-mark::before {
+      content: ""; position: absolute; top: 0; left: 50%; margin-left: -5px;
+      border: 5px solid transparent; border-top: 0; border-bottom: 6px solid var(--leaf);
+    }
+    .fit-mark[hidden] { display: none; }
+    .fit-mark + .fit-ends { margin-top: -2px; }
     .gender-row { display: flex; gap: 12px; flex-wrap: wrap; padding: 3px; }
     .swatch {
       display: inline-block; width: 18px; height: 14px; margin-right: 8px; vertical-align: -1px;
@@ -345,6 +357,18 @@
     .keepsake { margin: 14px 3px 0; }
     .keepsake img { display: block; width: 100%; image-rendering: pixelated; box-shadow: 0 0 0 3px var(--ink); background: #fff; }
     .keepsake p { font-size: 0.84rem; color: var(--soft); margin-top: 8px; }
+    /* A look at what was made: the model in 3D, or the PDF's pages. */
+    .preview { margin: 16px 3px 0; }
+    .model-view { position: relative; }
+    .model-canvas {
+      display: block; width: 100%; height: min(440px, 80vw); cursor: grab; touch-action: none;
+      color: var(--soft); background: var(--card); box-shadow: 0 0 0 3px var(--ink);
+    }
+    .model-canvas:active { cursor: grabbing; }
+    .model-canvas:focus-visible { outline: 3px dashed var(--leaf); outline-offset: 4px; }
+    .print-view { display: grid; gap: 14px; }
+    .print-view img { display: block; max-width: 100%; max-height: 78vh; margin-inline: auto; background: #fff; box-shadow: 0 0 0 3px var(--ink); }
+    .preview-note { font-size: 0.84rem; color: var(--soft); margin-top: 10px; }
     .btn-download {
       display: block;
       margin: 18px 3px 0;
@@ -380,7 +404,6 @@
       .tagline { margin-inline: auto; }
       .crowd img { width: 64px; height: 64px; }
       .say { font-size: 1.35rem; }
-      .options { grid-template-columns: 1fr; }
       .post { padding: 16px; }
       .btn-submit { width: calc(100% - 6px); justify-content: center; }
     }
@@ -497,7 +520,7 @@
               <button class="gender-btn"          data-make="square-stamp" type="button" aria-pressed="false">Square stamp</button>
               <button class="gender-btn"          data-make="stickers"     type="button" aria-pressed="false">Stickers</button>
               <button class="gender-btn"          data-make="towel"        type="button" aria-pressed="false">Towel</button>
-              <button class="gender-btn"          data-make="tote"         type="button" aria-pressed="false">Tote bag</button>
+              <button class="gender-btn"          data-make="shirt"        type="button" aria-pressed="false">Shirt</button>
             </div>
             <div class="field-note" id="make-note" hidden></div>
           </div>
@@ -637,7 +660,7 @@
               <button class="gender-btn"          data-border="dashed" type="button" aria-pressed="false">Dashed</button>
             </div>
           </div>
-          <div class="field" data-makes="stickers towel tote" hidden>
+          <div class="field" data-makes="stickers towel shirt" hidden>
             <span class="label" id="paper-label">Paper</span>
             <div class="gender-row" role="group" aria-labelledby="paper-label">
               <button class="gender-btn selected" data-paper="letter" type="button" aria-pressed="true">US Letter</button>
@@ -669,7 +692,7 @@
               <button class="gender-btn"          data-theme="mono"    type="button" aria-pressed="false"><span class="swatch" style="--s1:#ffffff;--s2:#c6c6c6;--s3:#7a7a7a"></span>Black &amp; white</button>
             </div>
           </div>
-          <div class="field field-wide" id="ink-field" data-makes="stickers towel tote" hidden>
+          <div class="field field-wide" id="ink-field" data-makes="stickers towel shirt" hidden>
             <span class="label" id="ink-label">Ink</span>
             <div class="gender-row" role="group" aria-labelledby="ink-label">
               <button class="gender-btn selected" data-ink="blue"   type="button" aria-pressed="true"><span class="swatch" style="--s1:#1f47c4"></span>Blue</button>
@@ -689,7 +712,7 @@
             </div>
             <div class="field-note">Draw them to test on plain paper first: hold the page against a label sheet to the light.</div>
           </div>
-          <div class="field" data-makes="towel tote" hidden>
+          <div class="field" data-makes="towel shirt" hidden>
             <span class="label" id="mirror-label">Printing on</span>
             <div class="gender-row" role="group" aria-labelledby="mirror-label">
               <button class="gender-btn selected" data-mirror="off" type="button" aria-pressed="true">Paper or a print shop</button>
@@ -702,7 +725,7 @@
             <input type="number" id="size" inputmode="decimal" min="20" max="80" step="1" placeholder="40" aria-describedby="size-note">
             <div class="field-note" id="size-note">Across, 20 to 80&nbsp;mm.</div>
           </div>
-          <div class="field field-wide" data-makes="coin stamp square-stamp stickers towel tote" hidden>
+          <div class="field field-wide" data-makes="coin stamp square-stamp stickers towel shirt" hidden>
             <span class="label" id="lettering-label">Text</span>
             <div class="gender-row" role="group" aria-labelledby="lettering-label">
               <button class="gender-btn selected" data-lettering="name"   type="button" aria-pressed="true">Their name</button>
@@ -723,6 +746,7 @@
               <output id="fit-value" for="fit">Standard</output>
             </div>
             <input type="range" id="fit" min="-0.1" max="0.2" step="0.05" value="0" aria-describedby="fit-note">
+            <button type="button" class="fit-mark" id="fit-mark" hidden>Recommended</button>
             <div class="fit-ends" aria-hidden="true"><span>Tighter</span><span>Looser</span></div>
             <div class="field-note" id="fit-note"></div>
           </div>
@@ -744,7 +768,7 @@
     <article class="px post" id="progress-card" hidden>
       <div class="post-head">
         <span class="avatar"><img class="avatar-look" src="{{ url_for('static', filename='mii-face.webp') }}" alt="" width="67" height="67"></span>
-        <div><p class="who">PrintMiiOut</p><p class="when">working…</p></div>
+        <div><p class="who">PrintMiiOut</p><p class="when">working...</p></div>
       </div>
       <p class="say">Building takes half a minute. Draw something while you wait!</p>
       <div class="doodle-wrap">
@@ -757,7 +781,7 @@
         <span class="spacer"></span>
         <button class="tool" type="button" id="doodle-clear">Clear</button>
       </div>
-      <p class="status-text" id="status-text" aria-live="polite">Fetching Mii data from the API…</p>
+      <p class="status-text" id="status-text" aria-live="polite">Fetching Mii data from the API...</p>
       <div class="progress-bar-wrap">
         <div class="progress-bar indeterminate" id="progress-bar"></div>
       </div>
@@ -775,6 +799,11 @@
         <img id="keepsake-img" alt="The doodle you drew while waiting">
         <p>Your doodle from while you waited. Right-click or long-press to save it.</p>
       </div>
+      <div class="preview" id="preview" hidden>
+        <div class="model-view" id="model-view" hidden></div>
+        <div class="print-view" id="print-view" hidden></div>
+        <p class="preview-note" id="preview-note"></p>
+      </div>
       <a id="download-link" class="btn-download" href="#">Download STL File</a>
       <button class="tool btn-again" id="btn-again" type="button">Create Another</button>
     </article>
@@ -786,7 +815,7 @@
       <p>PrintMiiOut fetches your Mii, builds a head and body right in your browser, and hands you an STL ready to slice for your 3D printer. Print your Mii with supports turned on.</p>
       <p>You can bring a Mii from a Nintendo Network ID (Wii U), a Pretendo Network ID, a binary Mii file (.mii or .ffsd), or a Mii QR code image. Glasses print as a flat frame with temple arms, and the figure can print as snap-together parts.</p>
       <p>It also makes print-in-place bobbleheads, coins with the face drawn flat, and round or square stamps to use with an ink pad, lettered with their name or your own text.</p>
-      <p>And for your regular printer: sheets of name stickers like Wii no Ma's, on sticker paper or any of The Print Shop's Avery label sheets, plus towel and tote bag designs for iron-on transfers.</p>
+      <p>And for your regular printer: sheets of name stickers like Wii no Ma's, on sticker paper or Avery label sheets, plus towel and shirt designs for iron-on transfers.</p>
       <p>Printer, filament and patience not included.</p>
     </section>
     <section class="px">
@@ -851,12 +880,13 @@
     paper: 'letter', facestyle: 'photo', theme: 'classic', ink: 'blue', outlines: 'off', mirror: 'off',
   };
   // Printed on paper as a PDF rather than on a 3D printer.
-  const PRINTS = ['stickers', 'towel', 'tote'];
+  const PRINTS = ['stickers', 'towel', 'shirt'];
   const MAKES = {
     'figure': { note: '' },
     'bobblehead': {
       note: 'The head hangs on a ball that prints inside it, so it nods straight off the printer. Print with supports under the head, then wiggle it gently to free the ball.',
       fit: 'Pivot fit',
+      recommend: 0,  // the core's own room round the ball, 0.45 mm
       fitNote: 'Head stuck after printing? Go looser. Too floppy? Go tighter. Each step gives the ball 0.05&nbsp;mm more or less room all round.',
     },
     'coin': {
@@ -879,8 +909,8 @@
     'towel': {
       note: 'A towel or handkerchief design, after the ones printed with a Mii stamp: a field of dots, with the face and name small in the corner. A PDF for iron-on transfer paper or a print shop.',
     },
-    'tote': {
-      note: 'A tote bag badge: the face in the middle of a ring lettered with the name. A PDF for iron-on transfer paper or a print shop.',
+    'shirt': {
+      note: 'A shirt print: the face in the middle of a ring lettered with the name. A PDF for iron-on transfer paper or a print shop.',
     },
   };
   const PIN_FIT_NOTE = 'Pins too hard to press in? Go looser. Slipping out? Go tighter. Each step gives every pin and the neck 0.05&nbsp;mm more or less room all round.';
@@ -901,6 +931,7 @@
     document.getElementById('fit-field').hidden = !(split || m.fit);
     document.getElementById('fit-label').textContent = split ? 'Pin fit' : m.fit || 'Pin fit';
     document.getElementById('fit-note').innerHTML = (split ? PIN_FIT_NOTE : m.fitNote || PIN_FIT_NOTE) + ' Remembered for your next Mii.';
+    showFit();
     if (m.size) {
       const [lo, hi, usual] = m.size;
       sizeInput.min = lo;
@@ -912,7 +943,7 @@
     textInput.hidden = choice.lettering !== 'custom';
     const printed = PRINTS.includes(choice.make);
     document.getElementById('text-pos-row').hidden = choice.lettering === 'none' || printed;
-    document.getElementById('ink-field').hidden = !(choice.make === 'towel' || choice.make === 'tote' ||
+    document.getElementById('ink-field').hidden = !(choice.make === 'towel' || choice.make === 'shirt' ||
       (choice.make === 'stickers' && choice.facestyle === 'drawn'));
     document.getElementById('outlines-field').hidden = choice.make !== 'stickers' || !sheetSelect.value;
     document.getElementById('yeah-note').innerHTML = printed
@@ -973,7 +1004,7 @@
       for (const l of items.sort((p, q) => p.w * p.h - q.w * q.h)) {
         seen.add(l.index);
         const n = l.cols * l.rows;
-        const parts = l.parts.length > 4 ? l.parts.slice(0, 4).join(', ') + '…' : l.parts.join(', ');
+        const parts = l.parts.length > 4 ? l.parts.slice(0, 4).join(', ') + '...' : l.parts.join(', ');
         const opt = new Option(`Avery ${parts}: ${sizeText(l, choice.paper)}, ${n} per sheet`, String(l.index));
         group.appendChild(opt);
       }
@@ -1103,11 +1134,27 @@
 
   // ── Pin fit, which depends on the printer, so it is kept for next time ────
   const fitInput = document.getElementById('fit');
-  const fitValue = document.getElementById('fit-value');
   function showFit() {
-    const v = Math.round(parseFloat(fitInput.value) * 100) / 100;
-    fitValue.textContent = v === 0 ? 'Standard' : `${Math.abs(v).toFixed(2)} mm ${v > 0 ? 'looser' : 'tighter'}`;
+    const input = document.getElementById('fit');
+    const v = Math.round(parseFloat(input.value) * 100) / 100;
+    const m = MAKES[choice.make];
+    const split = choice.make === 'figure' && choice.pieces === 'split';
+    const recommend = !split && m.recommend !== undefined ? m.recommend : null;
+    const text = v === 0 ? 'Standard' : `${Math.abs(v).toFixed(2)} mm ${v > 0 ? 'looser' : 'tighter'}`;
+    document.getElementById('fit-value').textContent = v === recommend ? `${text}, recommended` : text;
+    // The mark sits under the thumb's middle at the recommended value.
+    const mark = document.getElementById('fit-mark');
+    mark.hidden = recommend === null;
+    if (recommend !== null) {
+      const at = (recommend - Number(input.min)) / (Number(input.max) - Number(input.min));
+      mark.style.setProperty('--at', `calc(11px + (100% - 22px) * ${at})`);
+    }
   }
+  document.getElementById('fit-mark').addEventListener('click', () => {
+    fitInput.value = String(MAKES[choice.make].recommend || 0);
+    fitInput.dispatchEvent(new Event('input'));
+    fitInput.focus();
+  });
   try {
     const saved = localStorage.getItem('printmiiout-fit');
     if (saved !== null && Number.isFinite(parseFloat(saved))) fitInput.value = saved;
@@ -1225,26 +1272,27 @@
       }
     }
 
-    statusText.textContent = 'Looking up your Mii…';
+    statusText.textContent = 'Looking up your Mii...';
     setStage('progress');
 
     try {
       const { buildInBrowser } = await import("{{ url_for('static', filename='client/browser-build.js') }}");
       const built = await buildInBrowser(fd, text => { statusText.textContent = text; }, print);
       if (builtUrl) URL.revokeObjectURL(builtUrl);
-      builtUrl = URL.createObjectURL(built);
+      builtUrl = URL.createObjectURL(built.file);
       downloadLink.href = builtUrl;
       downloadLink.download = printed ? `printmiiout-${choice.make}.pdf`
         : choice.make === 'figure' ? 'printmiiout.stl' : `printmiiout-${choice.make}.stl`;
       downloadLink.textContent = printed ? 'Download PDF' : 'Download STL File';
       document.getElementById('result-say').textContent = {
-        stickers: 'Your stickers are ready!', towel: 'Your towel is ready!', tote: 'Your tote bag is ready!',
+        stickers: 'Your stickers are ready!', towel: 'Your towel is ready!', shirt: 'Your shirt is ready!',
       }[choice.make] || 'Your Mii is ready!';
       document.getElementById('result-text').textContent = printed
         ? (print.mirror ? 'Print it at 100% (Actual size) on the transfer paper, then iron it on.'
           : 'Print it at 100% (Actual size), not Fit to page, so everything comes out the right size.')
         : 'Your 3D Mii STL file has been generated successfully.';
       setStage('result');
+      showPreview(built, printed);
     } catch (err) {
       setStage('input');
       showError(err.message);
@@ -1268,8 +1316,57 @@
     }
   });
 
+  // ── A look at what was made ───────────────────────────────────────────────
+  const preview = document.getElementById('preview');
+  const modelView = document.getElementById('model-view');
+  const printView = document.getElementById('print-view');
+  const previewNote = document.getElementById('preview-note');
+  let viewer = null;
+  let previewUrls = [];
+  function clearPreview() {
+    if (viewer) { viewer.dispose(); viewer = null; }
+    previewUrls.forEach(url => URL.revokeObjectURL(url));
+    previewUrls = [];
+    printView.replaceChildren();
+    preview.hidden = modelView.hidden = printView.hidden = true;
+  }
+  async function showPreview(built, printed) {
+    clearPreview();
+    try {
+      if (printed) {
+        if (!built.previews.length) return;
+        const what = { stickers: 'your sticker sheet', towel: 'your towel design', shirt: 'your shirt design' }[choice.make] || 'your PDF';
+        built.previews.forEach((png, i) => {
+          const url = URL.createObjectURL(png);
+          previewUrls.push(url);
+          const img = new Image();
+          img.src = url;
+          img.alt = built.previews.length > 1 ? `Page ${i + 1} of ${what}` : `A preview of ${what}`;
+          printView.append(img);
+        });
+        previewNote.textContent = built.pages > built.previews.length
+          ? `The first ${built.previews.length} of ${built.pages} pages.` : '';
+        previewNote.hidden = !previewNote.textContent;
+        preview.hidden = printView.hidden = false;
+      } else {
+        const { viewModel } = await import("{{ url_for('static', filename='client/viewer.js') }}");
+        const buffer = await built.file.arrayBuffer();
+        preview.hidden = modelView.hidden = false;
+        const leaf = getComputedStyle(document.documentElement).getPropertyValue('--leaf').trim() || '#8fd14f';
+        viewer = viewModel(modelView, buffer, { color: leaf, label: '3D view of your Mii' });
+        const mm = viewer.size.map(v => Math.round(v)).join(' × ');
+        previewNote.textContent = `Drag to turn it, scroll or pinch to zoom, double-click to reset. ${mm} mm.`;
+        previewNote.hidden = false;
+      }
+    } catch (err) {
+      console.warn('No preview:', err);
+      clearPreview();
+    }
+  }
+
   // ── Start over ────────────────────────────────────────────────────────────
   document.getElementById('btn-again').addEventListener('click', () => {
+    clearPreview();
     if (builtUrl) {
       URL.revokeObjectURL(builtUrl);
       builtUrl = null;

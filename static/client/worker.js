@@ -7,15 +7,17 @@
 //        may be null)
 //   Out: { type: 'log', line } while it works, then
 //        { type: 'done', stl } (an ArrayBuffer) or { type: 'error', message }
-// Something printed on paper (stickers, a towel, a tote bag):
+// Something printed on paper (stickers, a towel, a shirt):
 //   In:  { print: { make, photo, head, mask, font, options } }  (photo, or
 //        head and mask for line art; options as stickers.js takes them)
-//   Out: { type: 'done', pdf } or { type: 'error', message }
+//   Out: { type: 'done', pdf, previews } (previews: a PNG Blob of each page,
+//        or none if the browser cannot draw them here) or
+//        { type: 'error', message }
 import createPrintMiiOut from './printmiiout-core.js';
 
 async function print({ make, photo, head, mask, font, options }) {
 	const core = await createPrintMiiOut();
-	const { makeStickers, makeTowel, makeTote, INKS } = await import('./stickers.js');
+	const { makeStickers, makeTowel, makeShirt, INKS } = await import('./stickers.js');
 	const face = {};
 	if (head) {
 		const drawn = core.drawFace(new Uint8Array(head), new Uint8Array(mask || 0), 1400);
@@ -28,15 +30,22 @@ async function print({ make, photo, head, mask, font, options }) {
 		face.photo = image;
 	}
 	const fontBytes = font ? new Uint8Array(font) : null;
-	const fn = make === 'towel' ? makeTowel : make === 'tote' ? makeTote : makeStickers;
-	return fn(core, fontBytes, face, options);
+	const fn = make === 'towel' ? makeTowel : make === 'shirt' ? makeShirt : makeStickers;
+	const { doc, pdf } = await fn(core, fontBytes, face, options);
+	let previews = [];
+	try {
+		previews = await doc.previews();
+	} catch (err) {
+		console.warn('No preview:', err);
+	}
+	return { pdf, previews, pages: doc.pages.length };
 }
 
 self.onmessage = async (event) => {
 	if (event.data.print) {
 		try {
-			const pdf = await print(event.data.print);
-			self.postMessage({ type: 'done', pdf: pdf.buffer }, [pdf.buffer]);
+			const { pdf, previews, pages } = await print(event.data.print);
+			self.postMessage({ type: 'done', pdf: pdf.buffer, previews, pages }, [pdf.buffer]);
 		} catch (err) {
 			self.postMessage({ type: 'error', message: String((err && err.message) || err) });
 		}

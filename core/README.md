@@ -64,7 +64,7 @@ if (result.error) throw new Error(result.error);
 // result.stl: Uint8Array, a binary STL
 ```
 
-Sticker sheets, towels and tote bags are drawn as PDFs in JavaScript (`static/client/stickers.js` and `pdf.js`), with three more functions from the module:
+Sticker sheets, towels and shirts are drawn as PDFs in JavaScript (`static/client/stickers.js` and `pdf.js`), with three more functions from the module:
 
 ```js
 core.outlineText(fontBytes, ['Jasmine'])  // glyph outlines in em units, curves kept, kerned
