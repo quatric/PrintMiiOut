@@ -48,15 +48,109 @@ NNID_RE = re.compile(r"^[A-Za-z0-9._-]{1,32}$")
 MII_QR_KEY = bytes([0x59, 0xFC, 0x81, 0x7E, 0x64, 0x46, 0xEA, 0x61, 0x90, 0x34, 0x7B, 0x20, 0xE9, 0xBD, 0xCE, 0x52])
 
 
+# Switch 2 Mii QR codes are a 3DS one (112 bytes) with 32 more after it: a
+# marker byte, then 15 bytes sealed with AES-CCM (the 3DS code's first 8
+# bytes and 4 zeros as the nonce, a 16-byte tag) whose first 9 are the rest
+# of a 10-byte extension. Its last 8 bytes are the Switch's wider colours
+# (nn::mii common colour indices) and glasses type, which the 3DS data has
+# no room for. As mii-unsecure.ariankordi.net reads them.
+MII_QR_SWITCH2_KEY = bytes([0xA9, 0x3C, 0xB1, 0x2E, 0x94, 0x86, 0x1A, 0xC1,
+                            0xD0, 0x74, 0xBB, 0x60, 0x19, 0xFD, 0x0E, 0x92])
+MII_QR_SWITCH2_LENGTH = 112 + 32
+MII_QR_SWITCH2_MARKER = 0x11
+
+
 def _decrypt_mii_qr_bytes(qr_bytes: bytes) -> bytes:
-    """Decrypt 3DS/Wii U/Miitomo Mii QR code payload (typically 112 or 96 bytes)."""
+    """Decrypt a Mii QR code's payload: 3DS/Wii U/Tomodachi Life (112 bytes
+    or more) to its 96-byte Ver3StoreData, or a Switch 2 one (144 bytes) to
+    an 88-byte Switch CharInfo carrying its wider colours."""
     from Crypto.Cipher import AES
     if len(qr_bytes) < 0x60:
         return qr_bytes
     nonce = qr_bytes[:8]
     cipher = AES.new(MII_QR_KEY, AES.MODE_CCM, nonce + bytes([0, 0, 0, 0]))
     content = cipher.decrypt(qr_bytes[8:8+0x58])
-    return content[:12] + nonce + content[12:]
+    ver3 = content[:12] + nonce + content[12:]
+    extension = _switch2_qr_extension(qr_bytes)
+    if extension is None:
+        return ver3
+    return _ver3_to_charinfo(ver3, extension[2:])
+
+
+def _switch2_qr_extension(qr_bytes: bytes) -> bytes | None:
+    """The 10-byte extension of a Switch 2 Mii QR code, or None for any
+    other code (or one whose extension does not authenticate)."""
+    from Crypto.Cipher import AES
+    if len(qr_bytes) != MII_QR_SWITCH2_LENGTH or qr_bytes[112] != MII_QR_SWITCH2_MARKER:
+        return None
+    sealed = qr_bytes[113:]
+    cipher = AES.new(MII_QR_SWITCH2_KEY, AES.MODE_CCM, nonce=qr_bytes[:8] + bytes(4), mac_len=16)
+    try:
+        plain = cipher.decrypt_and_verify(sealed[:-16], sealed[-16:])
+    except ValueError:
+        return None
+    return qr_bytes[112:113] + plain[:9]
+
+
+def _ver3_to_charinfo(ver3: bytes, colors: bytes) -> bytes:
+    """A 96-byte 3DS/Wii U Mii as a Switch nn::mii::CharInfo (88 bytes), its
+    colours and glasses type replaced by colors: faceline, hair, eye,
+    eyebrow, mouth, beard, glass colour, glass type."""
+    import hashlib
+    t = ver3
+    c = bytearray(88)
+    # A create ID made from the Mii, marked as a normal one.
+    create_id = bytearray(hashlib.sha256(bytes(t)).digest()[:16])
+    create_id[8] = (create_id[8] & 0x3F) | 0x80
+    c[0:16] = create_id
+    name = t[26:46]
+    if not any(name[:2]):
+        name = "Mii".encode("utf-16-le").ljust(20, b"\0")
+    c[16:36] = name
+    c[38] = (t[1] >> 4) & 3        # font region
+    c[39] = (t[25] >> 2) & 15      # favourite colour
+    c[40] = t[24] & 1              # gender
+    c[41] = min(t[46], 127)        # height
+    c[42] = min(t[47], 127)        # build
+    c[43] = 0 if t[12] & 0x80 else 1  # special unless its create ID is a normal one
+    c[44] = (t[1] >> 2) & 3        # region move
+    c[45] = (t[48] >> 1) & 15      # faceline type
+    c[47] = t[49] & 15             # wrinkles
+    c[48] = t[49] >> 4             # makeup
+    c[49] = t[50]                  # hair type
+    c[51] = (t[51] >> 3) & 1       # hair flip
+    c[52] = t[52] & 63             # eye type
+    c[54] = (t[53] >> 1) & 15      # eye scale
+    c[55] = t[53] >> 5             # eye aspect
+    c[56] = t[54] & 31             # eye rotate
+    c[57] = ((t[55] & 1) << 3) | (t[54] >> 5)  # eye x
+    c[58] = (t[55] >> 1) & 31      # eye y
+    c[59] = t[56] & 31             # eyebrow type
+    c[61] = t[57] & 15             # eyebrow scale
+    c[62] = (t[57] >> 4) & 7       # eyebrow aspect
+    c[63] = t[58] & 31             # eyebrow rotate
+    c[64] = ((t[59] & 1) << 3) | (t[58] >> 5)  # eyebrow x
+    c[65] = (t[59] >> 1) & 31      # eyebrow y
+    c[66] = t[60] & 31             # nose type
+    c[67] = ((t[61] & 1) << 3) | (t[60] >> 5)  # nose scale
+    c[68] = (t[61] >> 1) & 31      # nose y
+    c[69] = t[62] & 63             # mouth type
+    c[71] = (t[63] >> 1) & 15      # mouth scale
+    c[72] = t[63] >> 5             # mouth aspect
+    c[73] = t[64] & 31             # mouth y
+    c[75] = t[66] & 7              # beard type
+    c[76] = t[64] >> 5             # mustache type
+    c[77] = ((t[67] & 3) << 2) | (t[66] >> 6)  # mustache scale
+    c[78] = (t[67] >> 2) & 31      # mustache y
+    c[81] = ((t[69] & 7) << 1) | (t[68] >> 7)  # glass scale
+    c[82] = t[69] >> 3             # glass y
+    c[83] = t[70] & 1              # mole type
+    c[84] = (t[70] >> 1) & 15      # mole scale
+    c[85] = ((t[71] & 3) << 3) | (t[70] >> 5)  # mole x
+    c[86] = (t[71] >> 2) & 31      # mole y
+    # The colours (and glasses type) from the Switch 2 extension.
+    (c[46], c[50], c[53], c[60], c[70], c[74], c[80], c[79]) = colors[:8]
+    return bytes(c)
 
 
 def _normalize_mii_data(val: bytes | str) -> str:
@@ -64,7 +158,7 @@ def _normalize_mii_data(val: bytes | str) -> str:
     import base64
     if isinstance(val, bytes):
         raw = val
-        if len(raw) == 112:
+        if len(raw) in (112, MII_QR_SWITCH2_LENGTH):
             try:
                 raw = _decrypt_mii_qr_bytes(raw)
             except Exception:
@@ -77,7 +171,7 @@ def _normalize_mii_data(val: bytes | str) -> str:
         return s.lower()
     try:
         raw = base64.b64decode(s)
-        if len(raw) == 112:
+        if len(raw) in (112, MII_QR_SWITCH2_LENGTH):
             try:
                 raw = _decrypt_mii_qr_bytes(raw)
             except Exception:

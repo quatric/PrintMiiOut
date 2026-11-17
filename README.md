@@ -3,7 +3,7 @@
 PrintMiiOut converts Nintendo Mii characters into 3D-printable STL models. Enter an NNID/PNID, upload a binary file or QR code, and export a ready-to-print 3D model, built right in your browser. It also prints sticker sheets, and towel and shirt designs, as PDFs for your regular printer.
 
 ## Features
-- **Multiple Input Sources**: Fetch Miis by Nintendo Network ID (NNID), Pretendo Network ID (PNID), binary `.mii` / `.ffsd` files, or QR code images.
+- **Multiple Input Sources**: Fetch Miis by Nintendo Network ID (NNID), Pretendo Network ID (PNID), binary `.mii` / `.ffsd` files, or QR code images (3DS, Wii U and Tomodachi Life, and Switch 2 codes with their wider range of colours).
 - **Built in Your Browser**: The model pipeline is C++ ([core/](core/README.md)) compiled to WebAssembly, with [assimp](https://github.com/assimp/assimp) reading the Mii and writing the STL. The browser fetches the Mii straight from the Mii API and builds the model itself, smoothing it and fusing everything into one watertight solid; the server only reads the form (decrypting QR codes and looking up NNIDs).
 - **True Body Proportions**: The body follows the Mii's own height and build, scaled bone by bone the way Nintendo's editor scales it (the same rules as [FFL.js](https://github.com/ariankordi/FFL.js)). Arms, legs, wrists and ankles are held at a printable minimum thickness, so a very short, slim Mii keeps its look without snapping. An "Average" option uses the middle height and build instead.
 - **Printable Glasses**: Glasses become a flat frame that rests on the face, with temple arms holding it to the head.

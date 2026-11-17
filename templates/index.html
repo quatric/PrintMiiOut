@@ -496,7 +496,7 @@
           <div class="field">
             <label for="qr-file">Upload QR Code Image</label>
             <input type="file" id="qr-file" accept="image/*,.png,.jpg,.jpeg,.bmp,.webp">
-            <div class="field-note" id="qr-status" aria-live="polite">Upload a photo or screenshot of a Mii QR code (3DS, Wii U, Tomodachi Life).</div>
+            <div class="field-note" id="qr-status" aria-live="polite">Upload a photo or screenshot of a Mii QR code (3DS, Wii U, Switch 2, Tomodachi Life).</div>
           </div>
           <!-- Hidden field populated by JS after client-side decode -->
           <input type="hidden" id="qr-decoded-data" value="">
@@ -856,7 +856,7 @@
   const panels   = document.querySelectorAll('.panel');
   let activeTab  = 'nnid';
 
-  const QR_HINT = 'Upload a photo or screenshot of a Mii QR code (3DS, Wii U, Tomodachi Life).';
+  const QR_HINT = 'Upload a photo or screenshot of a Mii QR code (3DS, Wii U, Switch 2, Tomodachi Life).';
   const qrStatus = document.getElementById('qr-status');
   const qrFileInput = document.getElementById('qr-file');
   const qrDecodedData = document.getElementById('qr-decoded-data');
