@@ -15,6 +15,7 @@
 
 #include "body.hpp"
 #include "face2d.hpp"
+#include "flexi.hpp"
 #include "fuse.hpp"
 #include "geom.hpp"
 #include "head.hpp"
@@ -910,6 +911,7 @@ Mesh flatMii(std::vector<Part>& parts, Bytes maskBytes, const Options& o,
 	t.make = o.make;
 	t.size = o.size;
 	t.square = o.squareCoin;
+	t.faceShape = o.faceCoin;
 	t.rim = o.rim;
 	t.engraved = o.engraved;
 	t.text = o.text;
@@ -920,6 +922,52 @@ Mesh flatMii(std::vector<Part>& parts, Bytes maskBytes, const Options& o,
 	t.maxTriangles = o.maxTriangles;
 	Mesh m = makeTrinket(source, lettered ? &font : nullptr, t, log, tick);
 	char buf[160];
+	std::snprintf(buf, sizeof buf, "Printable: %zu faces, %d non-manifold edges", m.f.size(), countNonManifoldEdges(m));
+	log(buf);
+	return m;
+}
+
+/** An articulated Mii: the figure drawn flat, its arms and legs on joints
+ *  that print in place (flexi.cpp). */
+Mesh articulatedMii(std::vector<Part>& parts, Bytes maskBytes, Bytes bodyBytes, const Options& o,
+                    const std::function<void(const std::string&)>& log, const std::function<void(const char*)>& tick) {
+	if (o.body != 'm' && o.body != 'f') throw std::runtime_error("articulated: it needs a body");
+	if (!bodyBytes.size) throw std::runtime_error("body: no body model given");
+	FlatParts flat;
+	prepareFlat(parts, maskBytes, flat, log);
+	tick("face art");
+
+	Body body(bodyBytes.data, bodyBytes.size, o.height, o.build);
+	FlexiInput in;
+	in.face = flat.source;
+	auto pose = [&]() {
+		in.body = body.inHeadFrame();
+		for (Mesh& m : in.body)
+			for (V3& p : m.v) p = toZUp(p);
+		in.tags = body.faceTags();
+		auto joint = [&](const char* name) { return toZUp(body.jointInHeadFrame(name)); };
+		in.shoulderL = joint("arm_l1");
+		in.shoulderR = joint("arm_r1");
+		in.hipL = joint("foot_l1");
+		in.hipR = joint("foot_r1");
+	};
+	pose();
+	// Arms and legs at least 3 mm wide flat, whatever the Mii's build.
+	const double tall = std::clamp(o.size > 0 ? o.size : 100.0, 70.0, 200.0);
+	const double mmPerUnit = tall / flexiHeight(in);
+	int moved = body.thickenLimbs(1.5 / mmPerUnit / kHeadToBody);
+	pose();
+	char buf[200];
+	std::snprintf(buf, sizeof buf, "Body: height=%d build=%d, %d limb vertices held at the printable minimum", o.height,
+	              o.build, moved);
+	log(buf);
+	tick("body");
+
+	FlexiOptions fo;
+	fo.size = o.size;
+	fo.fit = o.fit;
+	fo.maxTriangles = o.maxTriangles;
+	Mesh m = makeFlexi(in, fo, log, tick);
 	std::snprintf(buf, sizeof buf, "Printable: %zu faces, %d non-manifold edges", m.f.size(), countNonManifoldEdges(m));
 	log(buf);
 	return m;
@@ -1018,6 +1066,12 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 	std::vector<Part> parts = loadHead(headBytes);
 	if (o.make == Make::Coin || o.make == Make::Stamp || o.make == Make::SquareStamp) {
 		Mesh m = flatMii(parts, maskBytes, o, log, tick);
+		std::vector<uint8_t> stl = exportSTL(m);
+		tick("export");
+		return stl;
+	}
+	if (o.make == Make::Articulated) {
+		Mesh m = articulatedMii(parts, maskBytes, bodyBytes, o, log, tick);
 		std::vector<uint8_t> stl = exportSTL(m);
 		tick("export");
 		return stl;

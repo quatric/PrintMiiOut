@@ -11,12 +11,13 @@
 
 namespace pmo {
 
-enum class Make { Figure, Bobblehead, Coin, Stamp, SquareStamp };
+enum class Make { Figure, Bobblehead, Coin, Stamp, SquareStamp, Articulated };
 
 struct TrinketOptions {
 	Make make = Make::Coin;
 	double size = 0;          // mm: the coin across, a stamp face across (0 picks the usual size)
 	bool square = false;      // coin: a rounded square instead of a circle
+	bool faceShape = false;   // coin: cut to the outline of the head instead (size is then its height or width)
 	bool rim = true;          // coin: a raised rim round the edge
 	bool engraved = false;    // coin: the face and lettering cut in instead of standing out
 	std::string text;         // UTF-8, lettered above or below the face

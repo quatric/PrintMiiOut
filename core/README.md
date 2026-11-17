@@ -12,13 +12,16 @@ The fuse works like a voxel remesh. It measures the distance to every part on a 
 
 `--make bobblehead` (`make: 'bobblehead'`) makes a print-in-place bobblehead (`bobblehead` in `pipeline.cpp`): the head is solidified on its own to find its centre of mass, raised clear of the shoulders, and hollowed round a ball on a post that rises from the neck, the ball just above that centre so the head hangs upright; the hollow has a pointed roof and a flared channel, so it prints without support inside, and `--fit` widens the gap round the ball.
 
+`--make articulated` (`make: 'articulated'`, with a body) makes a flat articulated Mii whose joints print in place (`flexi.cpp`): the posed body and the head are drawn from the front, each pixel labelled torso, arm or leg by the body's bone tags, and each limb gets a knob in a ring on the torso, clear of it by `--fit` plus 0.35 mm. The knob's edge bulges at mid-height into a groove in the ring, so it is held in the plate, and the torso is cut away wherever the top of the limb sweeps as it swings, so the neck turns in a slot narrower than the knob. Every piece is a signed distance function meshed by `meshSdf`, the face's lines and each piece's edge raised on top.
+
 `--make coin`, `stamp` and `square-stamp` draw the face flat instead (`face2d.cpp`): the head seen straight on, rasterized with a depth buffer, hair and beard filled, skin and cap outlined where parts meet, and the face textures traced, with lines too thin to print thickened. `trinkets.cpp` lays the face and the lettering (`text2d.cpp`, glyph outlines from stb_truetype) out on the coin or stamp face and builds every piece as a signed distance function (`sdf.hpp`) of the design's distance fields (`raster.cpp`), meshed by `meshSdf` (`sdf.cpp`: marching tetrahedra only in the blocks the surface can reach, every vertex projected onto the surface and relaxed, so it stays closed and simplifies well). The stamp faces print face up, keyed so they go in one way round.
 
 | Option | Flag | Module | |
 |---|---|---|---|
-| What to make | `--make figure\|bobblehead\|coin\|stamp\|square-stamp` | `make` | |
-| Size, mm | `--size MM` | `size` | coin across (20–80, 40), round stamp face across (12–40, 20), square stamp face width (15–40, 25; 1.2× as tall) |
+| What to make | `--make figure\|bobblehead\|coin\|stamp\|square-stamp\|articulated` | `make` | |
+| Size, mm | `--size MM` | `size` | coin across (20–80, 40; a face-shaped coin's height or width), round stamp face across (12–40, 20), square stamp face width (15–40, 25; 1.2× as tall), articulated Mii's height (70–200, 100) |
 | Rounded square coin | `--square` | `square` | |
+| Coin cut to the face's outline | `--face-shape` | `faceShape` | text goes on a tab under the chin |
 | No rim | `--no-rim` | `rim: false` | |
 | Engraved | `--engraved` | `engraved` | face and text sunk in instead of raised |
 | Border | `--border none\|line\|dashed` | `border` | stamps |

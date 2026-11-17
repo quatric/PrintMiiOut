@@ -34,6 +34,16 @@ const NEXT_BOBBLE_STAGE = {
 	'fuse head': 'Making the body...',
 	'fuse body': 'Writing the STL...',
 };
+// An articulated Mii: drawn flat, its joints cut, each piece carved.
+const NEXT_FLEXI_STAGE = {
+	'import and smooth shells': 'Drawing the face...',
+	'face art': 'Posing the body...',
+	'body': 'Drawing the figure...',
+	'draw figure': 'Cutting the joints...',
+	'cut joints': 'Carving the body...',
+	'carve torso': 'Carving the arms and legs...',
+	'export': 'Writing the STL...',
+};
 // Coins and stamps: the face drawn flat, then carved.
 const NEXT_FLAT_STAGE = {
 	'import and smooth shells': 'Drawing the face...',
@@ -149,6 +159,7 @@ export async function buildInBrowser(form, onStatus, print = {}) {
 	onStatus('Building your Mii in this browser...');
 	const stages = flat ? NEXT_FLAT_STAGE
 		: make === 'bobblehead' ? NEXT_BOBBLE_STAGE
+		: make === 'articulated' ? NEXT_FLEXI_STAGE
 		: job.split && job.body ? NEXT_SPLIT_STAGE : NEXT_STAGE;
 	const transfer = [head.buffer, mask.buffer];
 	if (body) transfer.push(body.buffer);
@@ -168,6 +179,7 @@ export async function buildInBrowser(form, onStatus, print = {}) {
 			fit: Number(job.fit) || 0,
 			size: Number(job.size) || 0,
 			square: job.shape === 'square',
+			faceShape: job.shape === 'face',
 			rim: job.rim !== false,
 			engraved: job.relief === 'engraved',
 			text: lettered ? job.text : '',

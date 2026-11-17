@@ -2,10 +2,10 @@
 //
 //   const core = await createPrintMiiOut();
 //   const result = core.generate(headGlb, maskPng, bodyGlb, {
-//       make: 'figure',  // or 'bobblehead', 'coin', 'stamp', 'square-stamp'
+//       make: 'figure',  // or 'bobblehead', 'coin', 'stamp', 'square-stamp', 'articulated'
 //       body: 'f', height: 64, build: 64, base: true, split: false, fit: 0,
 //       // coins and stamps:
-//       size: 0, square: false, rim: true, engraved: false,
+//       size: 0, square: false, faceShape: false, rim: true, engraved: false,
 //       text: '', textBelow: false, border: 'none', font: fontBytes,
 //       log: (line) => console.log(line)
 //   });
@@ -72,10 +72,12 @@ val generate(val head, val mask, val body, val options) {
 			         : m == "coin"         ? pmo::Make::Coin
 			         : m == "stamp"        ? pmo::Make::Stamp
 			         : m == "square-stamp" ? pmo::Make::SquareStamp
+			         : m == "articulated"  ? pmo::Make::Articulated
 			                               : pmo::Make::Figure;
 		}
 		if (options["size"].isNumber()) o.size = options["size"].as<double>();
 		if (!options["square"].isUndefined()) o.squareCoin = options["square"].as<bool>();
+		if (!options["faceShape"].isUndefined()) o.faceCoin = options["faceShape"].as<bool>();
 		if (!options["rim"].isUndefined()) o.rim = options["rim"].as<bool>();
 		if (!options["engraved"].isUndefined()) o.engraved = options["engraved"].as<bool>();
 		if (options["text"].isString()) o.text = options["text"].as<std::string>();

@@ -273,37 +273,151 @@ double teardrop(double x, double z, double r) {
 	return std::min(circle, std::max(diamond, -z));
 }
 
+/** A coin cut to the head's own outline instead of a circle or a square:
+ *  the head seen from the front, grown by margin all round (holes filled),
+ *  with the lettering, if any, on a rounded tab under the chin. The outline
+ *  is returned as a mask on the design's grid. */
+Design composeFaceShape(const FaceSource& face, const Font* font, const TrinketOptions& o, double D, double margin,
+                        const Style& st, Mask& outline, const LogFn& log) {
+	char buf[200];
+	const double fw = face.x1 - face.x0, fh = face.z1 - face.z0;
+	if (!(fw > 0 && fh > 0)) throw std::runtime_error("face: nothing to draw");
+	const double s = (D - 2 * margin) / std::max(fw, fh);  // mm per head unit
+	const double w = fw * s, h = fh * s;
+
+	// The lettering on its tab, centred under the face.
+	Line line;
+	if (font && font->loaded() && !o.text.empty()) line = font->layOut(o.text);
+	if (line.missing) {
+		std::snprintf(buf, sizeof buf, "Lettering: %d characters are not in the font and were left out", line.missing);
+		log(buf);
+	}
+	const bool hasText = line.advance > 0 && line.yMax > line.yMin;
+	double tabTop = -h / 2, tabBottom = -h / 2, tabHalfW = 0, em = 0, base = 0;
+	std::vector<Ring> letters;
+	if (hasText) {
+		const double top = line.yMax, bottom = std::min(line.yMin, 0.0), tall = std::max(top - bottom, 0.7);
+		em = std::min(0.14 * D / tall, 0.95 * std::max(w, 0.6 * D) / line.advance);
+		const double textH = tall * em, textW = line.advance * em, pad = margin + 0.4;
+		// The tab tucks under the chin, so its top hides behind the face's outline.
+		tabTop = -h / 2 + 0.25 * h;
+		const double textTop = -h / 2 - margin - 0.6;
+		base = textTop - top * em;
+		tabBottom = base + bottom * em - pad;
+		tabHalfW = textW / 2 + pad;
+		for (const Glyph& g : line.glyphs)
+			for (const Ring& r : g.rings) {
+				Ring out;
+				for (const P2& p : r) out.push_back({-textW / 2 + (g.x + p.x) * em, base + p.y * em});
+				letters.push_back(out);
+			}
+		(void)textH;
+		std::snprintf(buf, sizeof buf, "Lettering: %zu glyphs on a tab below the face, %.2f mm high", line.glyphs.size(),
+		              em);
+		log(buf);
+	}
+
+	const double halfW = std::max(w / 2, tabHalfW) + margin + 3, top = h / 2 + margin + 3,
+	             bottom = std::min(-h / 2, tabBottom) - margin - 3;
+	const double px = std::clamp(D / 1400, 0.02, 0.04);
+	Design d;
+	d.ink.cover(-halfW, bottom, halfW, top, px, 0);
+	d.head.reset(d.ink.x0, d.ink.y0, px, d.ink.w, d.ink.h, 0);
+	FaceArt art = face.draw(px / s, st.line / s, st.minWidth / s);
+	const double fcx = (face.x0 + face.x1) / 2, fcz = (face.z0 + face.z1) / 2;
+	for (int j = 0; j < d.ink.h; j++)
+		for (int i = 0; i < d.ink.w; i++) {
+			int ai, aj;
+			if (!art.ink.cell(fcx + d.ink.cx(i) / s, fcz + d.ink.cy(j) / s, ai, aj)) continue;
+			if (art.ink.at(ai, aj)) d.ink.at(i, j) = 1;
+			if (art.head.at(ai, aj)) d.head.at(i, j) = 1;
+		}
+	std::snprintf(buf, sizeof buf, "Face: %.1f by %.1f mm", w, h);
+	log(buf);
+
+	// The outline: the head grown by the margin, with the tab, its holes
+	// (between strands of hair, say) filled, and its notches rounded over.
+	outline = d.head;
+	tidy(outline, 0.25 * D * D);
+	offset(outline, margin + 1.0);
+	if (hasText) {
+		for (int j = 0; j < outline.h; j++)
+			for (int i = 0; i < outline.w; i++)
+				if (roundRect(outline.cx(i), outline.cy(j) - (tabTop + tabBottom) / 2, tabHalfW, (tabTop - tabBottom) / 2,
+				              std::min(3.0, (tabTop - tabBottom) / 2)) <= 0)
+					outline.at(i, j) = 1;
+	}
+	offset(outline, -1.0);
+	tidy(outline, 0.25 * D * D);
+
+	if (!letters.empty()) {
+		Mask text;
+		text.reset(d.ink.x0, d.ink.y0, px, d.ink.w, d.ink.h, 0);
+		fillRings(text, letters);
+		unite(d.ink, text);
+	}
+	tidy(d.ink, 0.15 * st.minWidth * st.minWidth);
+	d.dInk = distanceTo(d.ink);
+	d.dHead = distanceTo(d.head);
+	return d;
+}
+
 Mesh makeCoin(const FaceSource& face, const Font* font, const TrinketOptions& o, const LogFn& log,
               const std::function<void(const char*)>& tick) {
 	const double D = std::clamp(o.size > 0 ? o.size : 40.0, 20.0, 80.0), R = D / 2;
-	Area shape;
-	shape.round = !o.square;
-	shape.r = R;
-	shape.hx = shape.hy = R;
-	shape.corner = 0.18 * D;
 	const double rimWidth = std::max(1.4, 0.04 * D);
 	const double T = o.engraved ? 3.0 : 2.4;
 	const double hLow = 0.5, hHigh = 1.0, rimHeight = o.engraved ? 0.6 : 1.2;
-	Area art = shape.inset(o.rim ? rimWidth + 0.8 : 1.2);
 	Style st;
 	st.line = 0.5;
 	st.minWidth = 0.45;
 	TrinketOptions to = o;
 	to.border = 0;
-	Design d = compose(face, font, to, art, st, log);
+
+	// The coin's outline as a signed distance across it, and its box.
+	Design d;
+	Area shape;
+	Distance2 dOutline;
+	double x0 = -R, y0 = -R, x1 = R, y1 = R;
+	if (o.faceShape) {
+		Mask outline;
+		d = composeFaceShape(face, font, to, D, o.rim ? rimWidth + 0.9 : 1.2, st, outline, log);
+		dOutline = distanceTo(outline);
+		x0 = 1e300, y0 = 1e300, x1 = -1e300, y1 = -1e300;
+		for (int j = 0; j < outline.h; j++)
+			for (int i = 0; i < outline.w; i++)
+				if (outline.at(i, j)) {
+					x0 = std::min(x0, outline.cx(i) - outline.px);
+					x1 = std::max(x1, outline.cx(i) + outline.px);
+					y0 = std::min(y0, outline.cy(j) - outline.px);
+					y1 = std::max(y1, outline.cy(j) + outline.px);
+				}
+		if (!(x1 > x0)) throw std::runtime_error("face: no outline to cut the coin to");
+		char buf[120];
+		std::snprintf(buf, sizeof buf, "Outline: %.1f by %.1f mm", x1 - x0, y1 - y0);
+		log(buf);
+	} else {
+		shape.round = !o.square;
+		shape.r = R;
+		shape.hx = shape.hy = R;
+		shape.corner = 0.18 * D;
+		Area art = shape.inset(o.rim ? rimWidth + 0.8 : 1.2);
+		d = compose(face, font, to, art, st, log);
+	}
+	auto outlineSd = [&](double x, double y) { return o.faceShape ? dOutline(x, y) : shape.sd(x, y); };
 	tick("design");
 
 	const double cb = 0.4, ct = 0.3, taper = 0.2;
 	const Distance2 &dInk = d.dInk, &dHead = d.dHead;
-	auto clip = [&](double x, double y) { return shape.sd(x, y) + (o.rim ? rimWidth + 0.3 : 0.5); };
+	auto clip = [&](double s) { return s + (o.rim ? rimWidth + 0.3 : 0.5); };
 	Sdf f = [&](const V3& p) {
-		const double s = shape.sd(p.x, p.y);
+		const double s = outlineSd(p.x, p.y);
 		double body = extrude(s + std::max(0.0, cb - p.z) + (o.rim ? 0.0 : std::max(0.0, p.z - (T - ct))), p.z, 0, T);
 		if (o.rim) {
 			double ring = std::max(s, -(s + rimWidth));
 			body = std::min(body, extrude(ring + std::max(0.0, p.z - (T + rimHeight - 0.3)), p.z, T - 0.5, T + rimHeight));
 		}
-		const double c = clip(p.x, p.y);
+		const double c = clip(s);
 		if (o.engraved) {
 			double cutLow = extrude(std::max(dHead(p.x, p.y), c), p.z, T - hLow, T + 5);
 			double cutHigh = extrude(std::max(dInk(p.x, p.y), c), p.z, T - hHigh, T + 5);
@@ -314,9 +428,11 @@ Mesh makeCoin(const FaceSource& face, const Font* font, const TrinketOptions& o,
 		                     T + hHigh);
 		return std::min(body, std::min(plateau, ink));
 	};
-	const double voxel = std::clamp(D / 500, 0.06, 0.11);
-	Mesh coin = solidify(f, V3(-R, -R, 0), V3(R, R, T + std::max(rimHeight, hHigh)), Pose(), voxel, o.maxTriangles, log,
-	                     1.5);
+	const double voxel = std::clamp(std::max(x1 - x0, y1 - y0) / 500, 0.06, 0.11);
+	const double pad = o.faceShape ? 1.0 : 0.0;
+	Mesh coin = solidify(f, V3(x0 - pad, y0 - pad, 0), V3(x1 + pad, y1 + pad, T + std::max(rimHeight, hHigh)), Pose(),
+	                     voxel, o.maxTriangles,
+	                     log, 1.5);
 	tick("carve");
 	std::vector<Mesh> pieces{std::move(coin)};
 	return layOut(pieces, 6.0, 180.0);

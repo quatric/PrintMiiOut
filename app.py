@@ -229,7 +229,7 @@ SITEMAP_XML = (
 
 LLMS_TXT = f"""# PrintMiiOut (printmiiout.com)
 
-> A free web tool that turns a Nintendo Mii into a 3D-printable STL file: a figure, a bobblehead, a coin or a name stamp. It fetches the Mii and builds the model right in the visitor's browser (C++ compiled to WebAssembly), then hands over an STL for a slicer. It also draws printable PDFs for a regular printer: sheets of Mii name stickers, and towel and shirt designs.
+> A free web tool that turns a Nintendo Mii into a 3D-printable STL file: a figure, a bobblehead, an articulated Mii, a coin or a name stamp. It fetches the Mii and builds the model right in the visitor's browser (C++ compiled to WebAssembly), then hands over an STL for a slicer. It also draws printable PDFs for a regular printer: sheets of Mii name stickers, and towel and shirt designs.
 
 ## Using it
 
@@ -239,7 +239,8 @@ LLMS_TXT = f"""# PrintMiiOut (printmiiout.com)
 - The body follows the Mii's own height and build, scaled bone by bone as Nintendo's editor scales it, with arms and legs held thick enough to print. An "Average" option uses the middle height and build instead.
 - Besides a figure it makes:
   - a print-in-place bobblehead: the head hangs on a ball-ended post rising from the body, captured inside the head as it prints, so it nods without assembly;
-  - a coin or token with the face drawn flat (round or rounded square, with or without a rim, raised or engraved), lettered with the Mii's name or any text in Rodin NTLG;
+  - a flat articulated Mii, drawn from the front like a paper doll, whose arms and legs swing on joints that print in place (each limb's knob prints already captured in a ring on the body), with no supports or assembly;
+  - a coin or token with the face drawn flat (round, rounded square, or cut to the outline of the face, with or without a rim, raised or engraved), lettered with the Mii's name or any text in Rodin NTLG;
   - a round self-inking-style name stamp for an ink pad: a bullet-shaped grip, a face plug that prints face up and presses into it, and a cap;
   - a square stamp with a domed top showing the design, a face plate, two pins and a cap.
 - For a regular printer it draws PDFs:
@@ -271,7 +272,7 @@ def llms_txt():
     return _text(LLMS_TXT, "text/plain")
 
 
-MAKES = ("figure", "bobblehead", "coin", "stamp", "square_stamp", "stickers", "towel", "shirt")
+MAKES = ("figure", "bobblehead", "articulated", "coin", "stamp", "square_stamp", "stickers", "towel", "shirt")
 FLAT_MAKES = ("coin", "stamp", "square_stamp")
 # Printed on paper rather than a 3D printer: the browser draws a PDF.
 PRINT_MAKES = ("stickers", "towel", "shirt")
@@ -295,8 +296,8 @@ def _parse_form() -> tuple[tuple[dict, dict] | None, str | None]:
     body_type   = request.form.get("body_type", "auto")
     if body_type not in ("auto", "m", "f", "none"):
         body_type = "auto"
-    if make == "bobblehead" and body_type == "none":
-        body_type = "auto"  # the head bobbles on a body
+    if make in ("bobblehead", "articulated") and body_type == "none":
+        body_type = "auto"  # the head bobbles on a body; the limbs need one
     proportions = request.form.get("proportions", "mii")
     if proportions not in ("mii", "average"):
         proportions = "mii"
@@ -310,9 +311,9 @@ def _parse_form() -> tuple[tuple[dict, dict] | None, str | None]:
         size = float(request.form.get("size", "0"))
     except ValueError:
         size = 0.0
-    # Millimetres across; 0 for the usual size. The core keeps each make's
-    # size within what it can print.
-    size = round(min(max(size, 0.0), 100.0), 1) if math.isfinite(size) else 0.0
+    # Millimetres across (an articulated Mii: how tall); 0 for the usual size.
+    # The core keeps each make's size within what it can print.
+    size = round(min(max(size, 0.0), 200.0), 1) if math.isfinite(size) else 0.0
     lettering = request.form.get("lettering", "name")
     if lettering not in ("none", "name", "custom"):
         lettering = "name"
@@ -324,7 +325,7 @@ def _parse_form() -> tuple[tuple[dict, dict] | None, str | None]:
         "base": request.form.get("base", "on") != "off",
         "fit": fit,
         "size": size,
-        "shape": "square" if request.form.get("shape") == "square" else "round",
+        "shape": request.form.get("shape") if request.form.get("shape") in ("square", "face") else "round",
         "rim": request.form.get("rim", "on") != "off",
         "relief": "engraved" if request.form.get("relief") == "engraved" else "raised",
         "lettering": lettering,
@@ -459,6 +460,8 @@ def resolve():
             split=c["split"],
             base=c["base"],
         )
+        if c["make"] == "articulated":
+            job["size"] = c["size"]
     return jsonify(job)
 
 

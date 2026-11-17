@@ -3,15 +3,16 @@
 //
 //   printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb miiBodyM.glb]
 //                    [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM]
-//                    [--make figure|bobblehead|coin|stamp|square-stamp]
-//                    [--size MM] [--square] [--no-rim] [--engraved] [--border none|line|dashed]
+//                    [--make figure|bobblehead|coin|stamp|square-stamp|articulated]
+//                    [--size MM] [--square] [--face-shape] [--no-rim] [--engraved] [--border none|line|dashed]
 //                    [--text TEXT --font font.otf] [--text-below]
 //                    [--voxels 240] [--max-tris 600000]
 //
 // --fit gives pins and sliding pieces that many millimetres more room per
 // side (less when negative), for a printer whose holes come out too tight;
 // for a bobblehead, more room round its pivot; for a stamp, round its cap and
-// joints. --size is the coin across or the stamp's face across (mm).
+// joints; for an articulated Mii, round each joint. --size is the coin across,
+// the stamp's face across, or how tall an articulated Mii stands (mm).
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -75,14 +76,18 @@ int main(int argc, char** argv) {
 				o.make = pmo::Make::Stamp;
 			else if (m == "square-stamp")
 				o.make = pmo::Make::SquareStamp;
+			else if (m == "articulated")
+				o.make = pmo::Make::Articulated;
 			else {
-				std::fprintf(stderr, "--make: figure, bobblehead, coin, stamp or square-stamp\n");
+				std::fprintf(stderr, "--make: figure, bobblehead, coin, stamp, square-stamp or articulated\n");
 				return 1;
 			}
 		} else if (a == "--size")
 			o.size = std::atof(next().c_str());
 		else if (a == "--square")
 			o.squareCoin = true;
+		else if (a == "--face-shape")
+			o.faceCoin = true;
 		else if (a == "--no-rim")
 			o.rim = false;
 		else if (a == "--engraved")
@@ -107,8 +112,8 @@ int main(int argc, char** argv) {
 		std::fprintf(stderr,
 		             "usage: printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb body.glb]\n"
 		             "       [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM]\n"
-		             "       [--make figure|bobblehead|coin|stamp|square-stamp]\n"
-		             "       [--size MM] [--square] [--no-rim] [--engraved] [--border none|line|dashed]\n"
+		             "       [--make figure|bobblehead|coin|stamp|square-stamp|articulated]\n"
+		             "       [--size MM] [--square] [--face-shape] [--no-rim] [--engraved] [--border none|line|dashed]\n"
 		             "       [--text TEXT --font font.otf] [--text-below]\n"
 		             "       [--voxels 240] [--max-tris 600000]\n");
 		return 1;

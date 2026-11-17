@@ -18,7 +18,7 @@ struct Bytes {
 };
 
 struct Options {
-	Make make = Make::Figure;   // a figure, a bobblehead, a coin, or a round or square stamp
+	Make make = Make::Figure;   // a figure, a bobblehead, a coin, a round or square stamp, or an articulated Mii
 	char body = 0;              // 'm', 'f', or 0 for the head alone
 	int height = 64, build = 64;  // the Mii's own, 0 to 127
 	bool base = true;           // a disc under the feet
@@ -28,8 +28,9 @@ struct Options {
 	                            // around every pin and between pieces that slide together (split), round the
 	                            // bobblehead's pivot, and for a stamp's cap and joints
 	// Coins and stamps (see TrinketOptions).
-	double size = 0;            // mm, 0 for the usual size
+	double size = 0;            // mm, 0 for the usual size (an articulated Mii: how tall)
 	bool squareCoin = false;
+	bool faceCoin = false;      // a coin cut to the head's outline
 	bool rim = true;
 	bool engraved = false;
 	std::string text;           // UTF-8

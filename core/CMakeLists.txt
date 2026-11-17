@@ -66,6 +66,7 @@ add_library(pmo_core STATIC
 	src/text2d.cpp
 	src/sdf.cpp
 	src/trinkets.cpp
+	src/flexi.cpp
 	src/pipeline.cpp)
 target_include_directories(pmo_core PUBLIC src third_party)
 target_link_libraries(pmo_core PUBLIC assimp::assimp)
