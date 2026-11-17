@@ -180,6 +180,7 @@ export async function buildInBrowser(form, onStatus, print = {}) {
 			size: Number(job.size) || 0,
 			square: job.shape === 'square',
 			faceShape: job.shape === 'face',
+			keychain: !!job.keychain,
 			rim: job.rim !== false,
 			engraved: job.relief === 'engraved',
 			text: lettered ? job.text : '',

@@ -238,10 +238,10 @@ LLMS_TXT = f"""# PrintMiiOut (printmiiout.com)
 - The figure prints as one piece by default, or as snap-together parts: the head, torso, arms and legs (with or without the base) print separately and press together on pins with crush ribs, like building bricks. A "Pin fit" slider loosens or tightens every pin for the visitor's printer.
 - The body follows the Mii's own height and build, scaled bone by bone as Nintendo's editor scales it, with arms and legs held thick enough to print. An "Average" option uses the middle height and build instead.
 - Besides a figure it makes:
-  - the head alone in 3D, standing on a flat cut under the chin;
+  - the head alone in 3D, standing on a flat cut under the chin, with a keychain loop on top if wanted;
   - a print-in-place bobblehead: the head hangs on a ball-ended post rising from the body, captured inside the head as it prints, so it nods without assembly;
   - a flat articulated Mii, drawn from the front like a paper doll, whose arms and legs swing on joints that print in place (each limb's knob prints already captured in a ring on the body), with no supports or assembly;
-  - a coin or token with the face drawn flat (round, rounded square, or cut to the outline of the face, with or without a rim, raised or engraved), lettered with the Mii's name or any text in Rodin NTLG;
+  - a coin or token with the face drawn flat (round, rounded square, or cut to the outline of the face, with or without a rim, raised or engraved, with a keychain loop if wanted), lettered with the Mii's name or any text in Rodin NTLG;
   - a round self-inking-style name stamp for an ink pad: a bullet-shaped grip, a face plug that prints face up and presses into it, and a cap;
   - a square stamp with a domed top showing the design, a face plate, two pins and a cap.
 - For a regular printer it draws PDFs:
@@ -328,6 +328,7 @@ def _parse_form() -> tuple[tuple[dict, dict] | None, str | None]:
         "size": size,
         "shape": request.form.get("shape") if request.form.get("shape") in ("square", "face") else "round",
         "rim": request.form.get("rim", "on") != "off",
+        "keychain": request.form.get("keychain") == "on",
         "relief": "engraved" if request.form.get("relief") == "engraved" else "raised",
         "lettering": lettering,
         "text": _clean_text(request.form.get("text", "")) if lettering == "custom" else "",
@@ -447,6 +448,7 @@ def resolve():
             size=c["size"],
             shape=c["shape"],
             rim=c["rim"],
+            keychain=c["make"] == "coin" and c["keychain"],
             relief=c["relief"],
             text=text,
             text_pos=c["text_pos"],
@@ -454,7 +456,8 @@ def resolve():
         )
     elif c["make"] == "head":
         # The head alone: no body, and a flat cut under the chin for "base".
-        job.update(body=None, height=miidata.AVERAGE, build=miidata.AVERAGE, split=False, base=c["base"])
+        job.update(body=None, height=miidata.AVERAGE, build=miidata.AVERAGE, split=False, base=c["base"],
+                   keychain=c["keychain"])
     else:
         body_type, height, build = _body_for(raw, c["body_type"], c["proportions"])
         job.update(

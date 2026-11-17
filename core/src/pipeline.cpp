@@ -38,6 +38,10 @@ const double kBodyThicken = 0.006;
 const double kMinLimbRadius = 0.03;
 const double kBodySeamWeld = 0.003;
 const double kMinIsland = 0.01;
+// A keychain loop on a head printed alone: the ring's radius to the middle
+// of its tube, and the tube's radius (fractions of the head's width).
+const double kLoopRadius = 0.075;
+const double kLoopTube = 0.03;
 // How far above the chin a head printed alone is cut flat, so it stands
 // (a fraction of the head's width).
 const double kHeadFlat = 0.03;
@@ -135,6 +139,38 @@ std::vector<Part> loadHead(Bytes glb) {
 		parts.push_back(std::move(part));
 	}
 	return parts;
+}
+
+/** A ring on top of the head for a keychain: a torus in the XZ plane (the
+ *  hole runs front to back), sunk into the head's highest point. */
+Mesh keychainLoop(const Mesh& head, double unit) {
+	const double tube = kLoopTube * unit, R = kLoopRadius * unit;
+	// The top of the head, near the middle: the highest point within a
+	// tenth of the head's width of the centre line.
+	V3 lo, hi;
+	head.bounds(lo, hi);
+	const double xc = (lo.x + hi.x) / 2;
+	V3 top(xc, (lo.y + hi.y) / 2, lo.z);
+	for (const V3& p : head.v)
+		if (std::fabs(p.x - xc) < 0.1 * unit && p.z > top.z) top = p;
+	const V3 c(xc, top.y, top.z + R - tube);
+	const int seg = 64, ring = 24;
+	Mesh m;
+	for (int i = 0; i < seg; i++) {
+		const double a = 2 * M_PI * i / seg;
+		for (int j = 0; j < ring; j++) {
+			const double b = 2 * M_PI * j / ring, r = R + tube * std::cos(b);
+			m.v.push_back({c.x + r * std::cos(a), c.y + tube * std::sin(b), c.z + r * std::sin(a)});
+		}
+	}
+	for (int i = 0; i < seg; i++)
+		for (int j = 0; j < ring; j++) {
+			const int i1 = (i + 1) % seg, j1 = (j + 1) % ring;
+			const int a = i * ring + j, b = i1 * ring + j, c2 = i1 * ring + j1, d = i * ring + j1;
+			m.f.push_back({a, c2, b});
+			m.f.push_back({a, d, c2});
+		}
+	return m;
 }
 
 /** A disc under the feet, so a top-heavy Mii prints upright and stays standing. */
@@ -915,6 +951,7 @@ Mesh flatMii(std::vector<Part>& parts, Bytes maskBytes, const Options& o,
 	t.size = o.size;
 	t.square = o.squareCoin;
 	t.faceShape = o.faceCoin;
+	t.keychain = o.keychain;
 	t.rim = o.rim;
 	t.engraved = o.engraved;
 	t.text = o.text;
@@ -1205,6 +1242,10 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 	}
 
 	if (hasBody && o.base) pieces.push_back(makeBase(pieces, unit));
+	if (!hasBody && o.keychain) {
+		pieces.push_back(keychainLoop(pieces[0], unit));
+		log("Keychain loop on top of the head");
+	}
 
 	// The head alone stands on a flat cut under the chin instead of a base.
 	FuseExtras extras;

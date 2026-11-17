@@ -405,6 +405,34 @@ Mesh makeCoin(const FaceSource& face, const Font* font, const TrinketOptions& o,
 		d = compose(face, font, to, art, st, log);
 	}
 	auto outlineSd = [&](double x, double y) { return o.faceShape ? dOutline(x, y) : shape.sd(x, y); };
+
+	// A keychain loop: a ring standing above the top of the coin, on the
+	// middle line, its hole clear of the edge.
+	const double loopHole = std::max(1.8, 0.045 * D), loopWall = std::max(1.6, 0.04 * D);
+	const double loopOuter = loopHole + loopWall;
+	double loopY = 0;
+	if (o.keychain) {
+		double top = R;
+		if (o.faceShape) {
+			// The outline's highest point near the middle line.
+			top = -1e300;
+			for (double x = -0.1 * D; x <= 0.1 * D; x += 0.1 * D / 20)
+				for (double y = y1; y > y0; y -= 0.05)
+					if (outlineSd(x, y) <= 0) {
+						top = std::max(top, y);
+						break;
+					}
+		}
+		loopY = top + loopHole + 0.4;
+		y1 = std::max(y1, loopY + loopOuter + 0.5);
+		char buf[120];
+		std::snprintf(buf, sizeof buf, "Keychain loop: %.1f mm hole", 2 * loopHole);
+		log(buf);
+	}
+	auto loopSd = [&](double x, double y) {
+		const double rho = std::hypot(x, y - loopY);
+		return std::max(rho - loopOuter, loopHole - rho);
+	};
 	tick("design");
 
 	const double cb = 0.4, ct = 0.3, taper = 0.2;
@@ -413,10 +441,16 @@ Mesh makeCoin(const FaceSource& face, const Font* font, const TrinketOptions& o,
 	Sdf f = [&](const V3& p) {
 		const double s = outlineSd(p.x, p.y);
 		double body = extrude(s + std::max(0.0, cb - p.z) + (o.rim ? 0.0 : std::max(0.0, p.z - (T - ct))), p.z, 0, T);
+		if (o.keychain) {
+			// The ring, as thick as the coin, its hole cut through the rim too.
+			double ring = extrude(loopSd(p.x, p.y) + std::max(0.0, cb - p.z) + std::max(0.0, p.z - (T - ct)), p.z, 0, T);
+			body = std::min(body, ring);
+		}
 		if (o.rim) {
 			double ring = std::max(s, -(s + rimWidth));
 			body = std::min(body, extrude(ring + std::max(0.0, p.z - (T + rimHeight - 0.3)), p.z, T - 0.5, T + rimHeight));
 		}
+		if (o.keychain) body = std::max(body, -(std::hypot(p.x, p.y - loopY) - loopHole));
 		const double c = clip(s);
 		if (o.engraved) {
 			double cutLow = extrude(std::max(dHead(p.x, p.y), c), p.z, T - hLow, T + 5);

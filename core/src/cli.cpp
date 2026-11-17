@@ -4,7 +4,7 @@
 //   printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb miiBodyM.glb]
 //                    [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM]
 //                    [--make figure|bobblehead|coin|stamp|square-stamp|articulated]
-//                    [--size MM] [--square] [--face-shape] [--no-rim] [--engraved] [--border none|line|dashed]
+//                    [--size MM] [--square] [--face-shape] [--keychain] [--no-rim] [--engraved] [--border none|line|dashed]
 //                    [--text TEXT --font font.otf] [--text-below]
 //                    [--voxels 240] [--max-tris 600000]
 //
@@ -88,6 +88,8 @@ int main(int argc, char** argv) {
 			o.squareCoin = true;
 		else if (a == "--face-shape")
 			o.faceCoin = true;
+		else if (a == "--keychain")
+			o.keychain = true;
 		else if (a == "--no-rim")
 			o.rim = false;
 		else if (a == "--engraved")
@@ -113,7 +115,7 @@ int main(int argc, char** argv) {
 		             "usage: printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb body.glb]\n"
 		             "       [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM]\n"
 		             "       [--make figure|bobblehead|coin|stamp|square-stamp|articulated]\n"
-		             "       [--size MM] [--square] [--face-shape] [--no-rim] [--engraved] [--border none|line|dashed]\n"
+		             "       [--size MM] [--square] [--face-shape] [--keychain] [--no-rim] [--engraved] [--border none|line|dashed]\n"
 		             "       [--text TEXT --font font.otf] [--text-below]\n"
 		             "       [--voxels 240] [--max-tris 600000]\n");
 		return 1;

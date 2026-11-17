@@ -17,6 +17,7 @@ struct TrinketOptions {
 	Make make = Make::Coin;
 	double size = 0;          // mm: the coin across, a stamp face across (0 picks the usual size)
 	bool square = false;      // coin: a rounded square instead of a circle
+	bool keychain = false;    // coin: a ring tab at the top for a keychain
 	bool faceShape = false;   // coin: cut to the outline of the head instead (size is then its height or width)
 	bool rim = true;          // coin: a raised rim round the edge
 	bool engraved = false;    // coin: the face and lettering cut in instead of standing out

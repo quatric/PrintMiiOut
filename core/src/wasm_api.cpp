@@ -78,6 +78,7 @@ val generate(val head, val mask, val body, val options) {
 		if (options["size"].isNumber()) o.size = options["size"].as<double>();
 		if (!options["square"].isUndefined()) o.squareCoin = options["square"].as<bool>();
 		if (!options["faceShape"].isUndefined()) o.faceCoin = options["faceShape"].as<bool>();
+		if (!options["keychain"].isUndefined()) o.keychain = options["keychain"].as<bool>();
 		if (!options["rim"].isUndefined()) o.rim = options["rim"].as<bool>();
 		if (!options["engraved"].isUndefined()) o.engraved = options["engraved"].as<bool>();
 		if (options["text"].isString()) o.text = options["text"].as<std::string>();

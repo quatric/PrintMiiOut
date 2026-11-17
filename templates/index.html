@@ -633,6 +633,13 @@
               <button class="gender-btn"          data-base="off" type="button" aria-pressed="false" id="base-off">No base</button>
             </div>
           </div>
+          <div class="field" data-makes="head coin" hidden>
+            <span class="label" id="keychain-label">Keychain loop</span>
+            <div class="gender-row" role="group" aria-labelledby="keychain-label">
+              <button class="gender-btn selected" data-keychain="off" type="button" aria-pressed="true">None</button>
+              <button class="gender-btn"          data-keychain="on"  type="button" aria-pressed="false">On top</button>
+            </div>
+          </div>
           <div class="field" data-makes="coin" hidden>
             <span class="label" id="shape-label">Shape</span>
             <div class="gender-row" role="group" aria-labelledby="shape-label">
@@ -879,7 +886,7 @@
   // ── What to make, and the choices that go with it ─────────────────────────
   const choice = {
     make: 'figure', gender: 'auto', proportions: 'mii', pieces: 'whole', base: 'on',
-    shape: 'round', rim: 'on', relief: 'raised', border: 'none', lettering: 'name', textpos: 'above',
+    shape: 'round', rim: 'on', keychain: 'off', relief: 'raised', border: 'none', lettering: 'name', textpos: 'above',
     paper: 'letter', facestyle: 'photo', theme: 'classic', ink: 'blue', outlines: 'off', mirror: 'off',
   };
   // Printed on paper as a PDF rather than on a 3D printer.
@@ -1231,6 +1238,7 @@
     fd.append('pieces', choice.pieces);
     fd.append('base', choice.base);
     fd.append('fit', fitInput.value);
+    if (choice.make === 'head' || choice.make === 'coin') fd.append('keychain', choice.keychain);
     const flat = ['coin', 'stamp', 'square-stamp'].includes(choice.make);
     if (choice.make === 'articulated') {
       const size = parseFloat(sizeInput.value);
