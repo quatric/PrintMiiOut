@@ -144,10 +144,10 @@ export function viewModel(container, buffer, { color = '#8fd14f', label = '3D vi
 	canvas.tabIndex = 0;
 	canvas.setAttribute('role', 'img');
 	canvas.setAttribute('aria-label', `${label}. Drag to turn it, scroll or pinch to zoom, double-click to reset.`);
-	// Some phones refuse a multisampled context, so try again without it.
-	const gl = canvas.getContext('webgl', { antialias: true, alpha: true })
-		|| canvas.getContext('webgl', { antialias: false, alpha: true })
-		|| canvas.getContext('experimental-webgl');
+	// A multisampled canvas draws but never reaches the screen on some phones
+	// (PowerVR in Chrome), so render() smooths edges by drawing at 2x instead.
+	const attributes = { antialias: false, alpha: true };
+	const gl = canvas.getContext('webgl', attributes) || canvas.getContext('experimental-webgl', attributes);
 	if (!gl) throw new Error('WebGL is not available.');
 	container.append(canvas);
 
@@ -196,8 +196,8 @@ export function viewModel(container, buffer, { color = '#8fd14f', label = '3D vi
 	let frame = 0;
 	function render() {
 		frame = 0;
-		const dpr = Math.min(window.devicePixelRatio || 1, 2);
-		const w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+		const scale = 2;  // supersampled on coarser screens, in place of multisampling
+		const w = Math.max(1, Math.round(canvas.clientWidth * scale)), h = Math.max(1, Math.round(canvas.clientHeight * scale));
 		if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
 		gl.viewport(0, 0, w, h);
 		gl.clearColor(0, 0, 0, 0);
