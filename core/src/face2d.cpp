@@ -84,9 +84,12 @@ FaceArt drawFace(const std::vector<FacePart>& parts, double px, double line, dou
 	const int W = group.w, H = group.h;
 	const float kFar = std::numeric_limits<float>::max();
 	std::vector<float> depth(size_t(W) * H, kFar);  // y: the viewer is at -y
+	// Which part shows at each pixel, for a hat's own pattern.
+	std::vector<int16_t> shown(size_t(W) * H, -1);
 
 	// The opaque parts, nearest wins.
-	for (const FacePart& p : parts) {
+	for (size_t pi = 0; pi < parts.size(); pi++) {
+		const FacePart& p = parts[pi];
 		if (!p.mesh || isOverlay(p.name)) continue;
 		const Group gid = groupOf(p.name);
 		const Mesh& m = *p.mesh;
@@ -98,6 +101,7 @@ FaceArt drawFace(const std::vector<FacePart>& parts, double px, double line, dou
 				if (y < depth[k]) {
 					depth[k] = y;
 					group.a[k] = gid;
+					shown[k] = int16_t(pi);
 				}
 			});
 		}
@@ -123,6 +127,32 @@ FaceArt drawFace(const std::vector<FacePart>& parts, double px, double line, dou
 				if (inks(tex.nearest(u, v))) features.a[k] = 1;
 			});
 		}
+	}
+	// A hat's pattern (a beanie's stripes and stitching), drawn on it like
+	// the face's textures where the hat shows. Looked up on the hat as the
+	// GLB has it: smoothing moves the surface but not its texture, and
+	// would bend the stripes.
+	for (size_t pi = 0; pi < parts.size(); pi++) {
+		const FacePart& p = parts[pi];
+		const Mesh* m = p.pattern ? p.pattern : p.mesh;
+		if (!m || groupOf(p.name) != kCap || isOverlay(p.name) || !p.texture || p.texture->empty() || !m->hasUV())
+			continue;
+		std::vector<float> near(size_t(W) * H, kFar);
+		std::vector<V2> uv(size_t(W) * H);
+		for (size_t f = 0; f < m->f.size(); f++) {
+			const V3 &a = m->v[m->f[f][0]], &b = m->v[m->f[f][1]], &c = m->v[m->f[f][2]];
+			const V2 &ta = m->uv[f][0], &tb = m->uv[f][1], &tc = m->uv[f][2];
+			scan(group, a, b, c, [&](int i, int j, double w0, double w1, double w2) {
+				size_t k = size_t(j) * W + i;
+				if (shown[k] != int16_t(pi)) return;
+				float y = float(a.y * w0 + b.y * w1 + c.y * w2);
+				if (y >= near[k]) return;
+				near[k] = y;
+				uv[k] = {float(ta.u * w0 + tb.u * w1 + tc.u * w2), float(ta.v * w0 + tb.v * w1 + tc.v * w2)};
+			});
+		}
+		for (size_t k = 0; k < near.size(); k++)
+			if (near[k] != kFar && inks(p.texture->bilinear(uv[k].u, uv[k].v))) features.a[k] = 1;
 	}
 	// Texture lines can be finer than a printer prints: thicken just the
 	// thin ones (what an opening of minWidth would lose), not the shapes.

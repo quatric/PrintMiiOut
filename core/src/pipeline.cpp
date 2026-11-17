@@ -894,17 +894,23 @@ Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Opt
 struct FlatParts {
 	Image external;
 	std::vector<FacePart> parts;
+	std::vector<Mesh> patterns;  // hats before smoothing, to look their texture up on
 	FaceSource source;
 };
 
 void prepareFlat(std::vector<Part>& parts, Bytes maskBytes, FlatParts& out,
                  const std::function<void(const std::string&)>& log) {
 	if (maskBytes.size && !out.external.load(maskBytes.data, maskBytes.size)) log("Warning: could not read the mask PNG");
+	out.patterns.reserve(parts.size());  // FacePart points into it
 	for (Part& p : parts) {
 		bool overlay = has(p.name, "Mask") || has(p.name, "NoseLine") || has(p.name, "Glass") || has(p.name, "Xlu");
 		weld(p.mesh, 0.0001);
-		if (!overlay) subdivide(p.mesh, 2);  // smooth outlines
 		FacePart f;
+		if (has(p.name, "Cap") && !p.texture.empty()) {
+			out.patterns.push_back(p.mesh);
+			f.pattern = &out.patterns.back();
+		}
+		if (!overlay) subdivide(p.mesh, 2);  // smooth outlines
 		f.name = p.name;
 		f.mesh = &p.mesh;
 		f.texture = has(p.name, "Mask") && !out.external.empty() ? &out.external : &p.texture;

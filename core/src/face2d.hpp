@@ -1,6 +1,6 @@
 // The Mii's face as flat line art, the way Nintendo's Mii stamps drew it:
 // seen straight from the front, hair and beard filled in, the face and any
-// hat outlined, and the eyes, brows, mouth, nose line and glasses from their
+// hat outlined (with its own pattern drawn on), and the eyes, brows, mouth, nose line and glasses from their
 // textures. Coins and stamps are carved from it.
 #pragma once
 
@@ -18,6 +18,7 @@ struct FacePart {
 	std::string name;
 	const Mesh* mesh = nullptr;
 	const Image* texture = nullptr;
+	const Mesh* pattern = nullptr;  // where to look the texture up, if not mesh
 };
 
 struct FaceArt {
