@@ -633,7 +633,7 @@
               <button class="gender-btn"          data-base="off" type="button" aria-pressed="false" id="base-off">No base</button>
             </div>
           </div>
-          <div class="field" data-makes="head coin" hidden>
+          <div class="field" data-makes="head coin square-stamp" hidden>
             <span class="label" id="keychain-label">Keychain loop</span>
             <div class="gender-row" role="group" aria-labelledby="keychain-label">
               <button class="gender-btn selected" data-keychain="off" type="button" aria-pressed="true">None</button>
@@ -1238,7 +1238,7 @@
     fd.append('pieces', choice.pieces);
     fd.append('base', choice.base);
     fd.append('fit', fitInput.value);
-    if (choice.make === 'head' || choice.make === 'coin') fd.append('keychain', choice.keychain);
+    if (['head', 'coin', 'square-stamp'].includes(choice.make)) fd.append('keychain', choice.keychain);
     const flat = ['coin', 'stamp', 'square-stamp'].includes(choice.make);
     if (choice.make === 'articulated') {
       const size = parseFloat(sizeInput.value);

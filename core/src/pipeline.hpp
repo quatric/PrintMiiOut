@@ -31,7 +31,7 @@ struct Options {
 	double size = 0;            // mm, 0 for the usual size (an articulated Mii: how tall)
 	bool squareCoin = false;
 	bool faceCoin = false;      // a coin cut to the head's outline
-	bool keychain = false;      // a loop for a keychain: on top of a head printed alone, or of a coin
+	bool keychain = false;      // a loop for a keychain: on top of a head printed alone, a coin or a square stamp
 	bool rim = true;
 	bool engraved = false;
 	std::string text;           // UTF-8

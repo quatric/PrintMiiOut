@@ -266,6 +266,13 @@ double rectRibs(double x, double y, double hx, double hy, double protrude) {
 	return best;
 }
 
+/** A keychain loop: a ring standing upright on top of a piece, its hole
+ *  running along Y, centred at (0, 0, zc). */
+double loopRing(const V3& p, double zc, double radius, double tube) {
+	return std::hypot(std::hypot(p.x, p.z - zc) - radius, p.y) - tube;
+}
+const double kLoopRadius = 3.2, kLoopTube = 1.3;  // mm: a 3.8 mm hole
+
 /** A hole along Y through (x, z) = 0, pointed at the top so it prints without support. */
 double teardrop(double x, double z, double r) {
 	double circle = std::hypot(x, z) - r;
@@ -645,6 +652,7 @@ Mesh makeSquareStamp(const FaceSource& face, const Font* font, const TrinketOpti
 	// The top: domed front to back, with a sunken panel and the design
 	// standing in it, as the stamp's label.
 	auto surface = [&](double y) { return zb1 + Ht - sag * (y / ty) * (y / ty); };
+	const double zLoop = zb1 + Ht + kLoopRadius - 0.5 * kLoopTube;  // sunk into the top's crown
 	Sdf top = [&](const V3& p) {
 		double u = p.z - surface(p.y);
 		double body = smax(roundRect(p.x, p.y, tx, ty, tCorner), u, 1.5 * k);
@@ -655,6 +663,7 @@ Mesh makeSquareStamp(const FaceSource& face, const Font* font, const TrinketOpti
 		                        std::max(u, -0.7 - u));
 		body = std::min(body, label);
 		for (const Socket& s : inTop) body = std::max(body, -s.distance(p));
+		if (o.keychain) body = std::min(body, loopRing(p, zLoop, kLoopRadius, kLoopTube));
 		return body;
 	};
 
@@ -678,7 +687,8 @@ Mesh makeSquareStamp(const FaceSource& face, const Font* font, const TrinketOpti
 	tick("carve the face");
 	Mesh baseMesh = solidify(base, V3(-bx, -by, zb0), V3(bx, by, zb1), flip, coarse, budget, log);
 	tick("shape the base");
-	Mesh topMesh = solidify(top, V3(-tx, -ty, zb1), V3(tx, ty, zb1 + Ht), still, 0.13, budget, log, 1.3);
+	const double topTop = o.keychain ? zLoop + kLoopRadius + kLoopTube + 0.3 : zb1 + Ht;
+	Mesh topMesh = solidify(top, V3(-tx, -ty, zb1), V3(tx, ty, topTop), still, 0.13, budget, log, 1.3);
 	tick("shape the top");
 	Mesh capMesh = solidify(cap, V3(-bx, -by, zCap0), V3(bx, by, zCap1), still, coarse, budget, log);
 	tick("shape the cap");

@@ -448,7 +448,8 @@ def resolve():
             size=c["size"],
             shape=c["shape"],
             rim=c["rim"],
-            keychain=c["make"] == "coin" and c["keychain"],
+            # The round stamp has a strap hole through its grip already.
+            keychain=c["make"] in ("coin", "square_stamp") and c["keychain"],
             relief=c["relief"],
             text=text,
             text_pos=c["text_pos"],

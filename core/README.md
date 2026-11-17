@@ -22,7 +22,7 @@ The fuse works like a voxel remesh. It measures the distance to every part on a 
 | Size, mm | `--size MM` | `size` | coin across (20–80, 40; a face-shaped coin's height or width), round stamp face across (12–40, 20), square stamp face width (15–40, 25; 1.2× as tall), articulated Mii's height (70–200, 100) |
 | Rounded square coin | `--square` | `square` | |
 | Coin cut to the face's outline | `--face-shape` | `faceShape` | text goes on a tab under the chin |
-| Keychain loop | `--keychain` | `keychain` | a ring at the top of a coin, or on top of a head printed alone |
+| Keychain loop | `--keychain` | `keychain` | a ring at the top of a coin, on top of a square stamp, or on top of a head printed alone (the round stamp has its strap hole) |
 | No rim | `--no-rim` | `rim: false` | |
 | Engraved | `--engraved` | `engraved` | face and text sunk in instead of raised |
 | Border | `--border none\|line\|dashed` | `border` | stamps |
