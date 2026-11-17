@@ -14,7 +14,11 @@ void main() {
 }`;
 
 const MODEL_FRAGMENT = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
 precision mediump float;
+#endif
 uniform vec3 color;
 uniform vec3 light;   // towards the light
 uniform vec3 eye;     // towards the camera
@@ -34,7 +38,11 @@ uniform mat4 viewProjection;
 void main() { gl_Position = viewProjection * vec4(position, 1.0); }`;
 
 const LINE_FRAGMENT = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
 precision mediump float;
+#endif
 uniform vec4 color;
 void main() { gl_FragColor = color; }`;
 
@@ -136,7 +144,10 @@ export function viewModel(container, buffer, { color = '#8fd14f', label = '3D vi
 	canvas.tabIndex = 0;
 	canvas.setAttribute('role', 'img');
 	canvas.setAttribute('aria-label', `${label}. Drag to turn it, scroll or pinch to zoom, double-click to reset.`);
-	const gl = canvas.getContext('webgl', { antialias: true, alpha: true });
+	// Some phones refuse a multisampled context, so try again without it.
+	const gl = canvas.getContext('webgl', { antialias: true, alpha: true })
+		|| canvas.getContext('webgl', { antialias: false, alpha: true })
+		|| canvas.getContext('experimental-webgl');
 	if (!gl) throw new Error('WebGL is not available.');
 	container.append(canvas);
 
@@ -144,9 +155,9 @@ export function viewModel(container, buffer, { color = '#8fd14f', label = '3D vi
 	const centre = [0, 1, 2].map(i => (mesh.min[i] + mesh.max[i]) / 2);
 	const radius = Math.max(1e-3, Math.hypot(...size) / 2);
 
-	const modelProgram = program(gl, MODEL_VERTEX, MODEL_FRAGMENT);
-	const lineProgram = program(gl, LINE_VERTEX, LINE_FRAGMENT);
-	const buffers = [];
+	// Everything that lives on the GPU, so it can be made again if the browser
+	// takes the context away (phones do, when memory runs short).
+	let modelProgram, lineProgram, buffers = [], positions, normals, grid;
 	const upload = (data) => {
 		const b = gl.createBuffer();
 		gl.bindBuffer(gl.ARRAY_BUFFER, b);
@@ -154,9 +165,6 @@ export function viewModel(container, buffer, { color = '#8fd14f', label = '3D vi
 		buffers.push(b);
 		return b;
 	};
-	const positions = upload(mesh.position);
-	const normals = upload(mesh.normal);
-	mesh.position = mesh.normal = null;
 
 	// The build plate: 10 mm squares under the model, a square past its edge.
 	const step = 10;
@@ -166,8 +174,18 @@ export function viewModel(container, buffer, { color = '#8fd14f', label = '3D vi
 	const lines = [];
 	for (let x = gx0; x <= gx1 + 1e-6; x += step) lines.push(x, gy0, gz, x, gy1, gz);
 	for (let y = gy0; y <= gy1 + 1e-6; y += step) lines.push(gx0, y, gz, gx1, y, gz);
-	const grid = upload(new Float32Array(lines));
+	const gridData = new Float32Array(lines);
 	const gridCount = lines.length / 3;
+
+	function setup() {
+		modelProgram = program(gl, MODEL_VERTEX, MODEL_FRAGMENT);
+		lineProgram = program(gl, LINE_VERTEX, LINE_FRAGMENT);
+		buffers = [];
+		positions = upload(mesh.position);
+		normals = upload(mesh.normal);
+		grid = upload(gridData);
+	}
+	setup();
 
 	// Flat things (coins, stamp plates) are looked at from higher up.
 	const flat = size[2] < 0.5 * Math.max(size[0], size[1]);
@@ -232,6 +250,8 @@ export function viewModel(container, buffer, { color = '#8fd14f', label = '3D vi
 		gl.drawArrays(gl.TRIANGLES, 0, mesh.count * 3);
 		gl.disableVertexAttribArray(pos);
 		gl.disableVertexAttribArray(nor);
+		const error = gl.getError();
+		if (error) console.warn('The 3D preview hit a WebGL error:', error);
 	}
 	const draw = () => { if (!frame) frame = requestAnimationFrame(render); };
 
@@ -300,6 +320,11 @@ export function viewModel(container, buffer, { color = '#8fd14f', label = '3D vi
 		stopSpin();
 		keys[e.key]();
 		draw();
+	});
+
+	on('webglcontextlost', (e) => { e.preventDefault(); spin = false; });
+	on('webglcontextrestored', () => {
+		try { setup(); draw(); } catch (err) { console.warn('No 3D preview after the context came back:', err); }
 	});
 
 	const resized = new ResizeObserver(draw);
