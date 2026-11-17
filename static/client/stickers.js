@@ -612,7 +612,9 @@ export async function makeShirt(core, font, face, options) {
 	const ink = INKS[options.ink] || INKS.blue;
 	const art = new Art(core, font, { drawn: face.drawn, photo: face.photo && prepareImage(face.photo.width, face.photo.height, face.photo.rgba, 900), ink });
 	const [pw, ph] = PAPERS[options.paper] || PAPERS.letter;
-	const R = (Math.min(pw, ph) - 30) / 2;
+	// As wide as the paper allows, 6 mm in from each side (inside what
+	// nearly every printer can reach).
+	const R = (Math.min(pw, ph) - 12) / 2;
 	const cx = pw / 2, cy = ph / 2;
 	const ring = R * 0.22, mid = R - ring / 2;
 	const p = new Painter();
