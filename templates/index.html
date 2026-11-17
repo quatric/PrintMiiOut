@@ -1289,7 +1289,9 @@
 
     try {
       const { buildInBrowser } = await import("{{ url_for('static', filename='client/browser-build.js') }}");
-      const built = await buildInBrowser(fd, text => { statusText.textContent = text; }, print);
+      let built = await buildInBrowser(fd, text => { statusText.textContent = text; }, print);
+      // An older cached browser-build.js hands back the Blob itself.
+      if (built instanceof Blob) built = { file: built, previews: [], pages: printed ? 1 : 0 };
       if (builtUrl) URL.revokeObjectURL(builtUrl);
       builtUrl = URL.createObjectURL(built.file);
       downloadLink.href = builtUrl;

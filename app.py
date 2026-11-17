@@ -197,6 +197,15 @@ def index():
     return render_template("index.html")
 
 
+@app.after_request
+def _revalidate_client(resp):
+    # The page and the browser-side modules change together; make browsers (and
+    # any cache in front) check before reusing an old copy of one of them.
+    if request.path.startswith("/static/client/"):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 SITE_URL = "https://printmiiout.com"
 
 ROBOTS_TXT = (
