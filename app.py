@@ -336,7 +336,7 @@ LLMS_TXT = f"""# PrintMiiOut (printmiiout.com)
   - a print-in-place bobblehead: the head hangs on a ball-ended post rising from the body, captured inside the head as it prints, so it nods without assembly;
   - a flat articulated Mii, drawn from the front like a paper doll, whose arms and legs swing on joints that print in place (each limb's knob prints already captured in a ring on the body), with no supports or assembly;
   - a coin or token with the face drawn flat (round, rounded square, or cut to the outline of the face, with or without a rim, raised or engraved, with a keychain loop if wanted), lettered with the Mii's name or any text in Rodin NTLG;
-  - a keychain after Wii no Ma's: a round disc in a bezel with a bail for the chain, the face drawn in the middle and the name above or below it, built in three heights so two filament swaps colour it (background, face, then lines and rim);
+  - a keychain after Wii no Ma's: a round disc in a bezel with a ring for the chain, the face drawn in the middle and the name above or below it, built in three heights so two filament swaps colour it (background, face, then lines and rim);
   - a round self-inking-style name stamp for an ink pad: a bullet-shaped grip, a face plug that prints face up and presses into it, and a cap;
   - a square stamp with a domed top showing the design, a face plate, two pins and a cap.
 - For a regular printer it draws PDFs:

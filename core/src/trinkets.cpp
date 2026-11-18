@@ -479,21 +479,22 @@ Mesh makeCoin(const FaceSource& face, const Font* font, const TrinketOptions& o,
 	return layOut(pieces, 6.0, 180.0);
 }
 
-/** A keychain after the ones Wii no Ma made: a round disc in a thick bezel
- *  that flares at the top into a bail with a hole for the chain, the face
+/** A keychain after the ones Wii no Ma made: a round disc in a bezel with
+ *  a ring at the top for the chain, as on a coin, the face
  *  drawn in the middle and the name in a straight line above it (or below).
  *  It is a coin built in three steps of height, so swapping filament twice
  *  colours it like the original from the front: the disc (the background
  *  colour) to zField, the head's skin to zSkin, and the lines, the lettering,
- *  the bezel and the bail to zTop. */
+ *  the bezel and the ring to zTop. */
 Mesh makeKeychain(const FaceSource& face, const Font* font, const TrinketOptions& o, const LogFn& log,
                   const std::function<void(const char*)>& tick) {
 	const double D = std::clamp(o.size > 0 ? o.size : 35.0, 25.0, 60.0), R = D / 2;
 	// Each step a whole number of 0.2 mm layers, so the swaps land on a layer.
 	const double zField = 2.0, zSkin = 2.6, zTop = 3.2;
 	const double bezel = std::max(1.6, 0.05 * D);
-	const double loopHole = std::max(1.8, 0.05 * D), loopWall = std::max(1.8, 0.05 * D);
-	const double loopOuter = loopHole + loopWall, loopY = R + loopHole + 0.2, neck = 0.12 * D;
+	// The ring as on a coin, standing above the top, its hole clear of the edge.
+	const double loopHole = std::max(1.8, 0.045 * D), loopWall = std::max(1.6, 0.04 * D);
+	const double loopOuter = loopHole + loopWall, loopY = R + loopHole + 0.4;
 	Style st;
 	st.line = 0.75;  // bold, like the original's print
 	st.minWidth = 0.6;
@@ -514,9 +515,9 @@ Mesh makeKeychain(const FaceSource& face, const Font* font, const TrinketOptions
 	log(buf);
 	tick("design");
 
-	// The outline: the disc and the bail, the neck between them flared.
+	// The outline: the disc and the ring.
 	auto outlineSd = [&](double x, double y) {
-		return smin(std::hypot(x, y) - R, std::hypot(x, y - loopY) - loopOuter, neck);
+		return std::min(std::hypot(x, y) - R, std::hypot(x, y - loopY) - loopOuter);
 	};
 	// The lines stand straight up, so no step of the face's colour shows round them.
 	const double cb = 0.4, ct = 0.3;
@@ -525,7 +526,7 @@ Mesh makeKeychain(const FaceSource& face, const Font* font, const TrinketOptions
 		const double s = outlineSd(p.x, p.y), field = std::hypot(p.x, p.y) - (R - bezel);
 		const double chamfers = std::max(0.0, cb - p.z) + std::max(0.0, p.z - (zTop - ct));
 		double body = extrude(s + std::max(0.0, cb - p.z), p.z, 0, zField);
-		// The bezel and the bail: all of the outline outside the field.
+		// The bezel and the ring: all of the outline outside the field.
 		body = std::min(body, extrude(std::max(s, -field) + chamfers, p.z, 0, zTop));
 		const double c = field + 0.3;
 		double skin = extrude(std::max(dHead(p.x, p.y), c), p.z, zField - 0.5, zSkin);
