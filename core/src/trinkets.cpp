@@ -103,7 +103,7 @@ Design compose(const FaceSource& face, const Font* font, const TrinketOptions& o
 		const double top = line.yMax, bottom = std::min(line.yMin, 0.0);
 		const double tall = std::max(top - bottom, 0.7);
 		double em;
-		if (inner.round && !o.textBelow) {
+		if (inner.round && !o.textBelow && o.make != Make::Keychain) {
 			const double R = inner.r, band = 0.27 * R, maxAngle = 2.5;
 			em = band / tall;
 			double rb = R - top * em;
@@ -479,6 +479,68 @@ Mesh makeCoin(const FaceSource& face, const Font* font, const TrinketOptions& o,
 	return layOut(pieces, 6.0, 180.0);
 }
 
+/** A keychain after the ones Wii no Ma made: a round disc in a thick bezel
+ *  that flares at the top into a bail with a hole for the chain, the face
+ *  drawn in the middle and the name in a straight line above it (or below).
+ *  It is a coin built in three steps of height, so swapping filament twice
+ *  colours it like the original from the front: the disc (the background
+ *  colour) to zField, the head's skin to zSkin, and the lines, the lettering,
+ *  the bezel and the bail to zTop. */
+Mesh makeKeychain(const FaceSource& face, const Font* font, const TrinketOptions& o, const LogFn& log,
+                  const std::function<void(const char*)>& tick) {
+	const double D = std::clamp(o.size > 0 ? o.size : 35.0, 25.0, 60.0), R = D / 2;
+	// Each step a whole number of 0.2 mm layers, so the swaps land on a layer.
+	const double zField = 2.0, zSkin = 2.6, zTop = 3.2;
+	const double bezel = std::max(1.6, 0.05 * D);
+	const double loopHole = std::max(1.8, 0.05 * D), loopWall = std::max(1.8, 0.05 * D);
+	const double loopOuter = loopHole + loopWall, loopY = R + loopHole + 0.2, neck = 0.12 * D;
+	Style st;
+	st.line = 0.75;  // bold, like the original's print
+	st.minWidth = 0.6;
+	TrinketOptions to = o;
+	to.border = 0;
+
+	Area shape;
+	shape.round = true;
+	shape.r = shape.hx = shape.hy = R;
+	Design d = compose(face, font, to, shape.inset(bezel + 0.8), st, log);
+	char buf[200];
+	std::snprintf(buf, sizeof buf, "Keychain: %.1f mm across, %.1f mm hole for the chain", D, 2 * loopHole);
+	log(buf);
+	std::snprintf(buf, sizeof buf,
+	              "Colours: the background to %.1f mm, the face to %.1f mm, the lines, text and rim to %.1f mm "
+	              "(swap filament at %.1f and %.1f mm)",
+	              zField, zSkin, zTop, zField, zSkin);
+	log(buf);
+	tick("design");
+
+	// The outline: the disc and the bail, the neck between them flared.
+	auto outlineSd = [&](double x, double y) {
+		return smin(std::hypot(x, y) - R, std::hypot(x, y - loopY) - loopOuter, neck);
+	};
+	// The lines stand straight up, so no step of the face's colour shows round them.
+	const double cb = 0.4, ct = 0.3;
+	const Distance2 &dInk = d.dInk, &dHead = d.dHead;
+	Sdf f = [&](const V3& p) {
+		const double s = outlineSd(p.x, p.y), field = std::hypot(p.x, p.y) - (R - bezel);
+		const double chamfers = std::max(0.0, cb - p.z) + std::max(0.0, p.z - (zTop - ct));
+		double body = extrude(s + std::max(0.0, cb - p.z), p.z, 0, zField);
+		// The bezel and the bail: all of the outline outside the field.
+		body = std::min(body, extrude(std::max(s, -field) + chamfers, p.z, 0, zTop));
+		const double c = field + 0.3;
+		double skin = extrude(std::max(dHead(p.x, p.y), c), p.z, zField - 0.5, zSkin);
+		double ink = extrude(std::max(dInk(p.x, p.y), c), p.z, zField - 0.5, zTop);
+		body = std::min(body, std::min(skin, ink));
+		return std::max(body, -(std::hypot(p.x, p.y - loopY) - loopHole));
+	};
+	const double y1 = loopY + loopOuter + 0.5;
+	const double voxel = std::clamp(std::max(D, y1 + R) / 500, 0.06, 0.11);
+	Mesh m = solidify(f, V3(-R - 0.5, -R - 0.5, 0), V3(R + 0.5, y1, zTop), Pose(), voxel, o.maxTriangles, log, 1.5);
+	tick("carve");
+	std::vector<Mesh> pieces{std::move(m)};
+	return layOut(pieces, 6.0, 180.0);
+}
+
 /** The stamp that looks like a bullet: a grip with a strap hole and a
  *  thumb dip, the face on a plug that pushes into it (keyed by a flat, so
  *  the face only goes in the right way round), and a cap. The plug prints
@@ -719,8 +781,10 @@ Mesh makeTrinket(const FaceSource& face, const Font* font, const TrinketOptions&
 		return makeRoundStamp(face, font, o, log, tick);
 	case Make::SquareStamp:
 		return makeSquareStamp(face, font, o, log, tick);
+	case Make::Keychain:
+		return makeKeychain(face, font, o, log, tick);
 	default:
-		throw std::runtime_error("not a coin or a stamp");
+		throw std::runtime_error("not a coin, a keychain or a stamp");
 	}
 }
 

@@ -1110,7 +1110,7 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 	char buf[256];
 
 	std::vector<Part> parts = loadHead(headBytes);
-	if (o.make == Make::Coin || o.make == Make::Stamp || o.make == Make::SquareStamp) {
+	if (o.make == Make::Coin || o.make == Make::Keychain || o.make == Make::Stamp || o.make == Make::SquareStamp) {
 		Mesh m = flatMii(parts, maskBytes, o, log, tick);
 		std::vector<uint8_t> stl = exportSTL(m);
 		tick("export");

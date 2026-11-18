@@ -2,7 +2,7 @@
 //
 //   const core = await createPrintMiiOut();
 //   const result = core.generate(headGlb, maskPng, bodyGlb, {
-//       make: 'figure',  // or 'bobblehead', 'coin', 'stamp', 'square-stamp', 'articulated'
+//       make: 'figure',  // or 'bobblehead', 'coin', 'keychain', 'stamp', 'square-stamp', 'articulated'
 //       body: 'f', height: 64, build: 64, base: true, split: false, fit: 0,
 //       // coins and stamps:
 //       size: 0, square: false, faceShape: false, rim: true, engraved: false,
@@ -70,6 +70,7 @@ val generate(val head, val mask, val body, val options) {
 			std::string m = options["make"].as<std::string>();
 			o.make = m == "bobblehead"     ? pmo::Make::Bobblehead
 			         : m == "coin"         ? pmo::Make::Coin
+			         : m == "keychain"     ? pmo::Make::Keychain
 			         : m == "stamp"        ? pmo::Make::Stamp
 			         : m == "square-stamp" ? pmo::Make::SquareStamp
 			         : m == "articulated"  ? pmo::Make::Articulated

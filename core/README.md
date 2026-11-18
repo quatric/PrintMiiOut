@@ -14,12 +14,12 @@ The fuse works like a voxel remesh. It measures the distance to every part on a 
 
 `--make articulated` (`make: 'articulated'`, with a body) makes a flat articulated Mii whose joints print in place (`flexi.cpp`): the posed body and the head are drawn from the front, each pixel labelled torso, arm or leg by the body's bone tags, and each limb gets a knob in a ring on the torso, clear of it by `--fit` plus 0.35 mm. The knob's edge bulges at mid-height into a groove in the ring, so it is held in the plate, and the torso is cut away wherever the top of the limb sweeps as it swings, so the neck turns in a slot narrower than the knob. Every piece is a signed distance function meshed by `meshSdf`, the face's lines and each piece's edge raised on top.
 
-`--make coin`, `stamp` and `square-stamp` draw the face flat instead (`face2d.cpp`): the head seen straight on, rasterized with a depth buffer, hair and beard filled, skin and cap outlined where parts meet, and the face textures and the cap's pattern traced, with lines too thin to print thickened. `trinkets.cpp` lays the face and the lettering (`text2d.cpp`, glyph outlines from stb_truetype) out on the coin or stamp face and builds every piece as a signed distance function (`sdf.hpp`) of the design's distance fields (`raster.cpp`), meshed by `meshSdf` (`sdf.cpp`: marching tetrahedra only in the blocks the surface can reach, every vertex projected onto the surface and relaxed, so it stays closed and simplifies well). The stamp faces print face up, keyed so they go in one way round.
+`--make coin`, `keychain`, `stamp` and `square-stamp` draw the face flat instead (`face2d.cpp`): the head seen straight on, rasterized with a depth buffer, hair and beard filled, skin and cap outlined where parts meet, and the face textures and the cap's pattern traced, with lines too thin to print thickened. `trinkets.cpp` lays the face and the lettering (`text2d.cpp`, glyph outlines from stb_truetype) out on the coin or stamp face and builds every piece as a signed distance function (`sdf.hpp`) of the design's distance fields (`raster.cpp`), meshed by `meshSdf` (`sdf.cpp`: marching tetrahedra only in the blocks the surface can reach, every vertex projected onto the surface and relaxed, so it stays closed and simplifies well). The stamp faces print face up, keyed so they go in one way round. The keychain is a coin in a bezel with a bail, its name in a straight line, built in steps of 2.0, 2.6 and 3.2 mm (background, face, then lines and rim) so two filament swaps colour it.
 
 | Option | Flag | Module | |
 |---|---|---|---|
-| What to make | `--make figure\|bobblehead\|coin\|stamp\|square-stamp\|articulated` | `make` | |
-| Size, mm | `--size MM` | `size` | coin across (20–80, 40; a face-shaped coin's height or width), round stamp face across (12–40, 20), square stamp face width (15–40, 25; 1.2× as tall), articulated Mii's height (70–200, 100) |
+| What to make | `--make figure\|bobblehead\|coin\|keychain\|stamp\|square-stamp\|articulated` | `make` | |
+| Size, mm | `--size MM` | `size` | coin across (20–80, 40; a face-shaped coin's height or width), keychain disc across (25–60, 35), round stamp face across (12–40, 20), square stamp face width (15–40, 25; 1.2× as tall), articulated Mii's height (70–200, 100) |
 | Rounded square coin | `--square` | `square` | |
 | Coin cut to the face's outline | `--face-shape` | `faceShape` | text goes on a tab under the chin |
 | Keychain loop | `--keychain` | `keychain` | a ring at the top of a coin, on top of a square stamp, or on top of a head printed alone (the round stamp has its strap hole) |
@@ -58,7 +58,7 @@ Pass `-DFETCHCONTENT_SOURCE_DIR_ASSIMP=/path/to/assimp` to build from a local as
 import createPrintMiiOut from './printmiiout-core.js';
 const core = await createPrintMiiOut();
 const result = core.generate(headGlb, maskPng, bodyGlb, {
-    make: 'figure',  // or 'bobblehead', 'coin', 'stamp', 'square-stamp' (see the table above)
+    make: 'figure',  // or 'bobblehead', 'coin', 'keychain', 'stamp', 'square-stamp' (see the table above)
     body: 'f', height: 28, build: 55, base: true,
     split: false,  // true: snap-together parts and their pins, laid out for printing
     fit: 0,        // mm more room (less below 0) per side: pins and sliding pieces, the bobblehead's ball, a stamp's joints

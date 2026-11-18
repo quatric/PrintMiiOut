@@ -1,5 +1,6 @@
-// Coins and stamps: the Mii's face as flat line art, with lettering, carved
-// into a coin or the face of a stamp that works on an ink pad.
+// Coins, keychains and stamps: the Mii's face as flat line art, with
+// lettering, carved into a coin, a keychain or the face of a stamp that
+// works on an ink pad.
 #pragma once
 
 #include <functional>
@@ -11,7 +12,7 @@
 
 namespace pmo {
 
-enum class Make { Figure, Bobblehead, Coin, Stamp, SquareStamp, Articulated };
+enum class Make { Figure, Bobblehead, Coin, Stamp, SquareStamp, Articulated, Keychain };
 
 struct TrinketOptions {
 	Make make = Make::Coin;

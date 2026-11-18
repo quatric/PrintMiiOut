@@ -3,7 +3,7 @@
 //
 //   printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb miiBodyM.glb]
 //                    [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM]
-//                    [--make figure|bobblehead|coin|stamp|square-stamp|articulated]
+//                    [--make figure|bobblehead|coin|keychain|stamp|square-stamp|articulated]
 //                    [--size MM] [--square] [--face-shape] [--keychain] [--no-rim] [--engraved] [--border none|line|dashed]
 //                    [--text TEXT --font font.otf] [--text-below]
 //                    [--voxels 240] [--max-tris 600000]
@@ -11,7 +11,7 @@
 // --fit gives pins and sliding pieces that many millimetres more room per
 // side (less when negative), for a printer whose holes come out too tight;
 // for a bobblehead, more room round its pivot; for a stamp, round its cap and
-// joints; for an articulated Mii, round each joint. --size is the coin across,
+// joints; for an articulated Mii, round each joint. --size is the coin or keychain across,
 // the stamp's face across, or how tall an articulated Mii stands (mm).
 #include <cstdio>
 #include <cstdlib>
@@ -72,6 +72,8 @@ int main(int argc, char** argv) {
 				o.make = pmo::Make::Bobblehead;
 			else if (m == "coin")
 				o.make = pmo::Make::Coin;
+			else if (m == "keychain")
+				o.make = pmo::Make::Keychain;
 			else if (m == "stamp")
 				o.make = pmo::Make::Stamp;
 			else if (m == "square-stamp")
@@ -79,7 +81,7 @@ int main(int argc, char** argv) {
 			else if (m == "articulated")
 				o.make = pmo::Make::Articulated;
 			else {
-				std::fprintf(stderr, "--make: figure, bobblehead, coin, stamp, square-stamp or articulated\n");
+				std::fprintf(stderr, "--make: figure, bobblehead, coin, keychain, stamp, square-stamp or articulated\n");
 				return 1;
 			}
 		} else if (a == "--size")
@@ -114,7 +116,7 @@ int main(int argc, char** argv) {
 		std::fprintf(stderr,
 		             "usage: printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb body.glb]\n"
 		             "       [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM]\n"
-		             "       [--make figure|bobblehead|coin|stamp|square-stamp|articulated]\n"
+		             "       [--make figure|bobblehead|coin|keychain|stamp|square-stamp|articulated]\n"
 		             "       [--size MM] [--square] [--face-shape] [--keychain] [--no-rim] [--engraved] [--border none|line|dashed]\n"
 		             "       [--text TEXT --font font.otf] [--text-below]\n"
 		             "       [--voxels 240] [--max-tris 600000]\n");
@@ -123,7 +125,7 @@ int main(int argc, char** argv) {
 	auto head = readFile(pos[0]);
 	std::vector<uint8_t> maskData, bodyData, fontData;
 	if (!mask.empty()) maskData = readFile(mask);
-	bool flat = o.make == pmo::Make::Coin || o.make == pmo::Make::Stamp || o.make == pmo::Make::SquareStamp;
+	bool flat = o.make == pmo::Make::Coin || o.make == pmo::Make::Keychain || o.make == pmo::Make::Stamp || o.make == pmo::Make::SquareStamp;
 	if (o.body && !flat) bodyData = readFile(bodyGlb);
 	if (!fontPath.empty()) fontData = readFile(fontPath);
 	o.font = {fontData.data(), fontData.size()};

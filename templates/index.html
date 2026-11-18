@@ -4,18 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PrintMiiOut - 3D Print Your Mii, or Print Mii Stickers</title>
-  <meta name="description" content="Turn any Nintendo Mii into a 3D-printable figure, head, bobblehead, articulated Mii, coin or stamp, or print Mii name stickers and towel and shirt designs. Free, in your browser.">
+  <meta name="description" content="Turn any Nintendo Mii into a 3D-printable figure, head, bobblehead, articulated Mii, coin, keychain or stamp, or print Mii name stickers and towel and shirt designs. Free, in your browser.">
   <link rel="canonical" href="https://printmiiout.com/">
   <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="PrintMiiOut">
   <meta property="og:title" content="PrintMiiOut - 3D Print Your Mii, or Print Mii Stickers">
-  <meta property="og:description" content="Turn any Nintendo Mii into a 3D-printable figure, head, bobblehead, articulated Mii, coin or stamp, or print sheets of Mii name stickers, towels and shirts. Bring an NNID, PNID, Mii file or QR code.">
+  <meta property="og:description" content="Turn any Nintendo Mii into a 3D-printable figure, head, bobblehead, articulated Mii, coin, keychain or stamp, or print sheets of Mii name stickers, towels and shirts. Bring an NNID, PNID, Mii file or QR code.">
   <meta property="og:url" content="https://printmiiout.com/">
   <meta property="og:image" content="https://printmiiout.com/static/apple-touch-icon.png">
   <meta name="twitter:card" content="summary">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"WebApplication","name":"PrintMiiOut","url":"https://printmiiout.com/","description":"Turns Nintendo Mii characters into 3D-printable STL models, built in the browser: a figure (whole or as snap-together parts), a print-in-place bobblehead, a flat articulated Mii whose arms and legs swing on print-in-place joints, a coin (round, square or cut to the face's shape), or a round or square ink stamp. It also draws printable PDFs for a regular printer: sheets of Mii name stickers like Wii no Ma's, on sticker paper or Avery label sheets (US Letter and A4), and towel and shirt designs for iron-on transfers. Fetch a Mii by Nintendo Network ID or Pretendo Network ID, or upload a .mii/.ffsd file or a Mii QR code image.","featureList":["3D-printable Mii figures (STL), whole or as snap-together parts", "3D-printable Mii heads on their own", "Print-in-place Mii bobbleheads", "Flat articulated Miis with print-in-place joints", "Mii coins and ink stamps, lettered with the Mii's name", "Mii name sticker sheets (PDF) for sticker paper and Avery label sheets", "Mii towel and shirt designs (PDF) for iron-on transfers"],"applicationCategory":"MultimediaApplication","operatingSystem":"Any","browserRequirements":"Requires JavaScript","inLanguage":"en","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"image":"https://printmiiout.com/static/apple-touch-icon.png","codeRepository":"https://github.com/quatric/PrintMiiOut","license":"https://www.gnu.org/licenses/agpl-3.0.html"}
+  {"@context":"https://schema.org","@type":"WebApplication","name":"PrintMiiOut","url":"https://printmiiout.com/","description":"Turns Nintendo Mii characters into 3D-printable STL models, built in the browser: a figure (whole or as snap-together parts), a print-in-place bobblehead, a flat articulated Mii whose arms and legs swing on print-in-place joints, a coin (round, square or cut to the face's shape), a keychain like Wii no Ma's, or a round or square ink stamp. It also draws printable PDFs for a regular printer: sheets of Mii name stickers like Wii no Ma's, on sticker paper or Avery label sheets (US Letter and A4), and towel and shirt designs for iron-on transfers. Fetch a Mii by Nintendo Network ID or Pretendo Network ID, or upload a .mii/.ffsd file or a Mii QR code image.","featureList":["3D-printable Mii figures (STL), whole or as snap-together parts", "3D-printable Mii heads on their own", "Print-in-place Mii bobbleheads", "Flat articulated Miis with print-in-place joints", "Mii coins, keychains and ink stamps, lettered with the Mii's name", "Mii name sticker sheets (PDF) for sticker paper and Avery label sheets", "Mii towel and shirt designs (PDF) for iron-on transfers"],"applicationCategory":"MultimediaApplication","operatingSystem":"Any","browserRequirements":"Requires JavaScript","inLanguage":"en","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"image":"https://printmiiout.com/static/apple-touch-icon.png","codeRepository":"https://github.com/quatric/PrintMiiOut","license":"https://www.gnu.org/licenses/agpl-3.0.html"}
   </script>
   <meta name="theme-color" content="#eeeeee" id="theme-color">
   <script>
@@ -518,6 +518,7 @@
               <button class="gender-btn"          data-make="bobblehead"   type="button" aria-pressed="false">Bobblehead</button>
               <button class="gender-btn"          data-make="articulated"  type="button" aria-pressed="false">Articulated</button>
               <button class="gender-btn"          data-make="coin"         type="button" aria-pressed="false">Coin</button>
+              <button class="gender-btn"          data-make="keychain"     type="button" aria-pressed="false">Keychain</button>
               <button class="gender-btn"          data-make="stamp"        type="button" aria-pressed="false">Round stamp</button>
               <button class="gender-btn"          data-make="square-stamp" type="button" aria-pressed="false">Square stamp</button>
               <button class="gender-btn"          data-make="stickers"     type="button" aria-pressed="false">Stickers</button>
@@ -730,12 +731,12 @@
             </div>
             <div class="field-note">Iron-on transfers print mirrored, so the design reads the right way once ironed on.</div>
           </div>
-          <div class="field" data-makes="coin stamp square-stamp articulated" hidden>
+          <div class="field" data-makes="coin keychain stamp square-stamp articulated" hidden>
             <label for="size">Size in mm</label>
             <input type="number" id="size" inputmode="decimal" min="20" max="80" step="1" placeholder="40" aria-describedby="size-note">
             <div class="field-note" id="size-note">Across, 20 to 80&nbsp;mm.</div>
           </div>
-          <div class="field field-wide" data-makes="coin stamp square-stamp stickers towel shirt" hidden>
+          <div class="field field-wide" data-makes="coin keychain stamp square-stamp stickers towel shirt" hidden>
             <span class="label" id="lettering-label">Text</span>
             <div class="gender-row" role="group" aria-labelledby="lettering-label">
               <button class="gender-btn selected" data-lettering="name"   type="button" aria-pressed="true">Their name</button>
@@ -824,7 +825,7 @@
       <h2>About</h2>
       <p>PrintMiiOut fetches your Mii, builds a head and body right in your browser, and hands you an STL ready to slice for your 3D printer. Print your Mii with supports turned on.</p>
       <p>You can bring a Mii from a Nintendo Network ID (Wii U), a Pretendo Network ID, a binary Mii file (.mii or .ffsd), or a Mii QR code image. Glasses print as a flat frame with temple arms, and the figure can print as snap-together parts.</p>
-      <p>It also makes print-in-place bobbleheads, flat articulated Miis whose arms and legs swing on joints printed in place, coins with the face drawn flat (round, square or cut to the shape of the face), and round or square stamps to use with an ink pad, lettered with their name or your own text.</p>
+      <p>It also makes print-in-place bobbleheads, flat articulated Miis whose arms and legs swing on joints printed in place, coins with the face drawn flat (round, square or cut to the shape of the face), keychains like the ones Wii no Ma made, and round or square stamps to use with an ink pad, lettered with their name or your own text.</p>
       <p>And for your regular printer: sheets of name stickers like Wii no Ma's, on sticker paper or Avery label sheets, plus towel and shirt designs for iron-on transfers.</p>
       <p>Printer, filament and patience not included.</p>
     </section>
@@ -911,6 +912,10 @@
     'coin': {
       note: 'The face is drawn flat, like a sticker. Prints flat on its back with no supports.',
       size: [20, 80, 40], sizeNote: 'Across, 20 to 80&nbsp;mm. Face shape: its height or width, whichever is more.',
+    },
+    'keychain': {
+      note: 'A keychain like the ones Wii no Ma made: the face and name on a round disc in a bezel, with a bail for the chain. Prints flat with no supports. For colour like the original, swap filament at 2.0 mm (from the background colour, such as blue or pink, to white for the face) and at 2.6 mm (to black for the lines and rim).',
+      size: [25, 60, 35], sizeNote: 'Across the disc, 25 to 60&nbsp;mm.',
     },
     'stamp': {
       note: 'A name stamp for an ink pad: a grip, the face, which prints face up and presses into it, and a cap. Stamped, the face and text read the right way round.',
@@ -1239,7 +1244,7 @@
     fd.append('base', choice.base);
     fd.append('fit', fitInput.value);
     if (['head', 'coin', 'square-stamp'].includes(choice.make)) fd.append('keychain', choice.keychain);
-    const flat = ['coin', 'stamp', 'square-stamp'].includes(choice.make);
+    const flat = ['coin', 'keychain', 'stamp', 'square-stamp'].includes(choice.make);
     if (choice.make === 'articulated') {
       const size = parseFloat(sizeInput.value);
       const [lo, hi] = MAKES.articulated.size;

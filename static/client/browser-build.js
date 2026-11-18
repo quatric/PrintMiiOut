@@ -44,7 +44,7 @@ const NEXT_FLEXI_STAGE = {
 	'carve torso': 'Carving the arms and legs...',
 	'export': 'Writing the STL...',
 };
-// Coins and stamps: the face drawn flat, then carved.
+// Coins, keychains and stamps: the face drawn flat, then carved.
 const NEXT_FLAT_STAGE = {
 	'import and smooth shells': 'Drawing the face...',
 	'face art': 'Laying out the design...',
@@ -56,7 +56,7 @@ const NEXT_FLAT_STAGE = {
 	'shape the top': 'Shaping the cap...',
 	'shape the cap': 'Writing the STL...',
 };
-const FLAT = new Set(['coin', 'stamp', 'square-stamp']);
+const FLAT = new Set(['coin', 'keychain', 'stamp', 'square-stamp']);
 // Printed on paper: the browser draws a PDF.
 export const PRINTS = new Set(['stickers', 'towel', 'shirt']);
 // Rodin NTLG Pro B, cut down to the characters a name or a label uses.
