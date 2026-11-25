@@ -137,7 +137,7 @@ double Voxels::room(const V3& mouth, const V3& a, double r, double maxDepth, con
 	return std::min(maxDepth, std::min(ring - wall, centre - r - wall));
 }
 
-Voxels voxelize(const std::vector<const Mesh*>& parts, double voxel, const LogFn& log) {
+Voxels voxelize(const std::vector<const Mesh*>& parts, double voxel, const LogFn& log, bool fillPockets) {
 	Voxels g;
 	V3 lo(1e300, 1e300, 1e300), hi(-1e300, -1e300, -1e300);
 	size_t triCount = 0;
@@ -211,7 +211,10 @@ Voxels voxelize(const std::vector<const Mesh*>& parts, double voxel, const LogFn
 	std::vector<uint8_t>& state = g.state;
 	state.assign(N, 0);
 	auto flood = [&](uint16_t limit, uint8_t bit) {
-		auto free = [&](size_t idx) { return dist[idx] > limit && !(state[idx] & bit); };
+		// The second fill keeps to the first's outside (it always would, but for filled pockets).
+		auto free = [&](size_t idx) {
+			return dist[idx] > limit && !(state[idx] & bit) && (bit == kOutside || (state[idx] & kOutside));
+		};
 		std::vector<std::array<int, 3>> stack{{0, 0, 0}};
 		while (!stack.empty()) {
 			auto [i, j, k] = stack.back();
@@ -238,6 +241,36 @@ Voxels voxelize(const std::vector<const Mesh*>& parts, double voxel, const LogFn
 	// Everything reachable from the grid's edge without crossing a surface
 	// is outside; the rest, enclosed or near a surface, is solid.
 	flood(wallQ, kOutside);
+	if (fillPockets) {
+		// Each outside voxel: which of -x, +x, -y, +y, +z has a wall somewhere along it.
+		std::vector<uint8_t> walled(N, 0);
+		auto wallAt = [&](size_t idx) { return !(state[idx] & kOutside); };
+		for (int k = 0; k < nz; k++)
+			for (int j = 0; j < ny; j++) {
+				bool seen = false;
+				for (int i = 0; i < nx; i++) seen = (walled[at(i, j, k)] |= seen ? 1 : 0, seen || wallAt(at(i, j, k)));
+				seen = false;
+				for (int i = nx - 1; i >= 0; i--) seen = (walled[at(i, j, k)] |= seen ? 2 : 0, seen || wallAt(at(i, j, k)));
+			}
+		for (int k = 0; k < nz; k++)
+			for (int i = 0; i < nx; i++) {
+				bool seen = false;
+				for (int j = 0; j < ny; j++) seen = (walled[at(i, j, k)] |= seen ? 4 : 0, seen || wallAt(at(i, j, k)));
+				seen = false;
+				for (int j = ny - 1; j >= 0; j--) seen = (walled[at(i, j, k)] |= seen ? 8 : 0, seen || wallAt(at(i, j, k)));
+			}
+		for (int j = 0; j < ny; j++)
+			for (int i = 0; i < nx; i++) {
+				bool seen = false;
+				for (int k = nz - 1; k >= 0; k--) seen = (walled[at(i, j, k)] |= seen ? 16 : 0, seen || wallAt(at(i, j, k)));
+			}
+		size_t filled = 0;
+		for (size_t idx = 0; idx < N; idx++)
+			if ((state[idx] & kOutside) && walled[idx] == 31) state[idx] &= ~kOutside, filled++;
+		char buf[96];
+		std::snprintf(buf, sizeof buf, "Filled %zu voxels of pockets", filled);
+		log(buf);
+	}
 	// A passage only a little wider than the wall would print as a row of
 	// pinholes (an arm hanging just off the body, say), so open the outside
 	// morphologically: keep only what a ball of radius kTunnel voxels can

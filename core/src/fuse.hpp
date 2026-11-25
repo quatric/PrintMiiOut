@@ -90,7 +90,9 @@ struct Voxels {
 /** voxel: grid spacing. Every part's triangles count; a part needs no
  *  particular orientation or closure, but gaps wider than about half a
  *  voxel let the outside in. */
-Voxels voxelize(const std::vector<const Mesh*>& parts, double voxel, const LogFn& log);
+/** fillPockets: outside space walled in on every side but underneath (inside
+ *  a head, behind hair that stops short of the face) counts as solid. */
+Voxels voxelize(const std::vector<const Mesh*>& parts, double voxel, const LogFn& log, bool fillPockets = false);
 
 /** The voxels' surface, with sockets and carves cut into it. */
 Mesh contour(Voxels& voxels, const LogFn& log, const FuseExtras& extras = {});

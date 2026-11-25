@@ -764,7 +764,7 @@ Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Opt
 	// The head on its grid: its centre of mass, and where there is room.
 	std::vector<const Mesh*> headInputs;
 	for (const Mesh& m : headParts) headInputs.push_back(&m);
-	Voxels headGrid = voxelize(headInputs, voxel, log);
+	Voxels headGrid = voxelize(headInputs, voxel, log, true);  // solid behind short hair, for the pivot
 	V3 com;
 	{
 		double count = 0;
