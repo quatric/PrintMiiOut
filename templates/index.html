@@ -634,6 +634,14 @@
               <button class="gender-btn"          data-base="off" type="button" aria-pressed="false" id="base-off">No base</button>
             </div>
           </div>
+          <div class="field" data-makes="figure bobblehead head">
+            <span class="label" id="hair-label">Hair</span>
+            <div class="gender-row" role="group" aria-labelledby="hair-label">
+              <button class="gender-btn selected" data-hair="smooth"   type="button" aria-pressed="true">Smooth</button>
+              <button class="gender-btn"          data-hair="detailed" type="button" aria-pressed="false">Detailed</button>
+              <button class="gender-btn"          data-hair="faceted"  type="button" aria-pressed="false">Faceted</button>
+            </div>
+          </div>
           <div class="field" id="mmu-field" data-makes="figure bobblehead head">
             <span class="label" id="mmu-label">Colours</span>
             <div class="gender-row" role="group" aria-labelledby="mmu-label">
@@ -641,7 +649,7 @@
               <button class="gender-btn"          data-mmu="on"  type="button" aria-pressed="false">Multi-material</button>
             </div>
           </div>
-          <div class="field-note field-wide" id="mmu-note" hidden>For printers that change filament by themselves (an AMS, an MMU or a toolchanger): a 3MF painted in six slots, 1 skin, 2 hair, 3 eyes and glasses, 4 shirt and hat, 5 trousers, 6 base. Open it in Bambu Studio, OrcaSlicer or PrusaSlicer and pick a filament for each slot.</div>
+          <div class="field-note field-wide" id="mmu-note" hidden>For printers that change filament by themselves (an AMS, an MMU or a toolchanger): a 3MF painted in seven slots, 1 skin, 2 hair, 3 black (pupils, mouth, glasses, trousers), 4 shirt and hat, 5 white (eye whites), 6 eyebrows, 7 base. Open it in Bambu Studio, OrcaSlicer or PrusaSlicer and pick a filament for each slot.</div>
           <div class="field" data-makes="head coin square-stamp" hidden>
             <span class="label" id="keychain-label">Keychain loop</span>
             <div class="gender-row" role="group" aria-labelledby="keychain-label">
@@ -894,7 +902,7 @@
 
   // ── What to make, and the choices that go with it ─────────────────────────
   const choice = {
-    make: 'figure', gender: 'auto', proportions: 'mii', pieces: 'whole', base: 'on', mmu: 'off',
+    make: 'figure', gender: 'auto', proportions: 'mii', pieces: 'whole', base: 'on', mmu: 'off', hair: 'smooth',
     shape: 'round', rim: 'on', keychain: 'off', relief: 'raised', border: 'none', lettering: 'name', textpos: 'above',
     paper: 'letter', facestyle: 'photo', theme: 'classic', ink: 'blue', outlines: 'off', mirror: 'off',
   };
@@ -1255,6 +1263,7 @@
     fd.append('pieces', choice.pieces);
     fd.append('base', choice.base);
     fd.append('mmu', choice.mmu);
+    fd.append('hair', choice.hair);
     fd.append('fit', fitInput.value);
     if (['head', 'coin', 'square-stamp'].includes(choice.make)) fd.append('keychain', choice.keychain);
     const flat = ['coin', 'keychain', 'stamp', 'square-stamp'].includes(choice.make);

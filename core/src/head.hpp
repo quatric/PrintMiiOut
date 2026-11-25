@@ -11,7 +11,12 @@ namespace pmo {
 
 /** Raise the features the mask texture paints (eyes, brows, mouth) into
  *  relief on the face. faceline may be null. Empty if nothing is painted. */
-Mesh embossMask(const Mesh& mask, const Image& texture, const Mesh* faceline, const BVH* facelineBVH);
+/** What a face feature is painted, for multi-material prints. */
+enum FeatureInk : int { kInkDark = 0, kInkWhite = 1, kInkBrow = 2 };
+/** paint (optional): the features flat on the face, a hair off it, every
+ *  inked face kept, its FeatureInk in inks. */
+Mesh embossMask(const Mesh& mask, const Image& texture, const Mesh* faceline, const BVH* facelineBVH,
+                Mesh* paint = nullptr, std::vector<int>* inks = nullptr);
 
 /** Hat stripes, pressed in from the cap texture. */
 void embossCap(Mesh& cap, const Image& texture);

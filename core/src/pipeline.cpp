@@ -1025,14 +1025,22 @@ Mesh articulatedMii(std::vector<Part>& parts, Bytes maskBytes, Bytes bodyBytes, 
 
 // Multi-material: each face of the print is painted the filament slot of the
 // nearest part it was made from. Slots count from 1, as slicers number them.
-enum Slot : int { kSkin = 1, kHair, kFeatures, kShirt, kPants, kBase };
+enum Slot : int { kSkin = 1, kHair, kBlack, kShirt, kWhite, kBrow, kBase };
 
 struct PaintSource {
 	const Mesh* mesh;
 	std::function<int(int)> slot;  // of a face of mesh
 };
 
-std::vector<int> paintFaces(const Mesh& out, const std::vector<PaintSource>& sources) {
+/** The face's features flat on it, painted: whatever lies within reach of
+ *  it takes its slot instead (eye whites, which are not raised). */
+struct PaintSheet {
+	Mesh mesh;
+	std::vector<int> slots;
+	double reach = 0;
+};
+
+std::vector<int> paintFaces(const Mesh& out, const std::vector<PaintSource>& sources, const PaintSheet* sheet = nullptr) {
 	// Every source in one tree, so each face takes a single lookup.
 	Mesh all;
 	std::vector<int> slotOf;
@@ -1042,11 +1050,28 @@ std::vector<int> paintFaces(const Mesh& out, const std::vector<PaintSource>& sou
 	}
 	all.uv.clear();
 	BVH tree(all);
+	std::unique_ptr<BVH> sheetTree;
+	V3 lo, hi;
+	if (sheet && !sheet->mesh.f.empty()) {
+		sheetTree = std::make_unique<BVH>(sheet->mesh);
+		sheet->mesh.bounds(lo, hi);
+		lo = lo - V3(sheet->reach, sheet->reach, sheet->reach);
+		hi = hi + V3(sheet->reach, sheet->reach, sheet->reach);
+	}
 	std::vector<int> slots(out.f.size(), kSkin);
 	for (size_t f = 0; f < out.f.size(); f++) {
 		const Tri& t = out.f[f];
+		const V3 c = (out.v[t[0]] + out.v[t[1]] + out.v[t[2]]) * (1.0 / 3);
 		int face = -1;
-		tree.closest((out.v[t[0]] + out.v[t[1]] + out.v[t[2]]) * (1.0 / 3), &face);
+		if (sheetTree && c.x >= lo.x && c.y >= lo.y && c.z >= lo.z && c.x <= hi.x && c.y <= hi.y && c.z <= hi.z) {
+			V3 q = sheetTree->closest(c, &face);
+			if (face >= 0 && length(q - c) <= sheet->reach) {
+				slots[f] = sheet->slots[face];
+				continue;
+			}
+		}
+		face = -1;
+		tree.closest(c, &face);
 		if (face >= 0) slots[f] = slotOf[face];
 	}
 	return slots;
@@ -1255,7 +1280,10 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 	// Weld UV-seam split vertices, but leave the open seams the shells share.
 	for (Part* p : opaque) weld(p->mesh, 0.0001);
 	for (Part* p : masks) weld(p->mesh, 0.0001);
-	for (Part* p : opaque) subdivide(p->mesh, 3);
+	for (Part* p : opaque) {
+		bool hair = has(p->name, "Hair") || has(p->name, "Beard");
+		subdivide(p->mesh, 3, hair ? std::clamp(o.hairSmoothing, 0, 3) : 3);
+	}
 	for (Part* p : opaque) {
 		if (p->name == "OpaCap") embossCap(p->mesh, p->texture);
 		if (p->name == "OpaHair") thickenHair(p->mesh);
@@ -1276,12 +1304,32 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 	if (faceline) facelineBVH = std::make_unique<BVH>(*faceline);
 	std::vector<Mesh> pieces;
 	pieces.emplace_back();  // the head goes first
+	PaintSheet sheet;  // multi-material: the features flat on the face
 	for (Part* p : masks) {
 		const Image& img = has(p->name, "Mask") && !external.empty() ? external : p->texture;
-		Mesh feature = embossMask(p->mesh, img, faceline, facelineBVH.get());
+		Mesh paint;
+		std::vector<int> inks;
+		Mesh feature = embossMask(p->mesh, img, faceline, facelineBVH.get(), o.mmu ? &paint : nullptr, &inks);
 		if (!feature.f.empty()) pieces.push_back(std::move(feature));
+		sheet.mesh.append(paint);
+		for (int k : inks) sheet.slots.push_back(k == kInkWhite ? kWhite : k == kInkBrow ? kBrow : kBlack);
 	}
 	facelineBVH.reset();
+	// Each raised feature face: the slot of the flat feature it stands on.
+	std::vector<std::vector<int>> featureSlots;
+	if (o.mmu && !sheet.mesh.f.empty()) {
+		BVH tree(sheet.mesh);
+		for (size_t i = 1; i < pieces.size(); i++) {
+			const Mesh& m = pieces[i];
+			std::vector<int> slots(m.f.size(), kBlack);
+			for (size_t f = 0; f < m.f.size(); f++) {
+				int face = -1;
+				tree.closest((m.v[m.f[f][0]] + m.v[m.f[f][1]] + m.v[m.f[f][2]]) * (1.0 / 3), &face);
+				if (face >= 0 && sheet.slots[face] == kBrow) slots[f] = kBrow;
+			}
+			featureSlots.push_back(std::move(slots));
+		}
+	}
 	tick("emboss face features");
 
 	std::vector<Mesh> shells;
@@ -1312,7 +1360,10 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 	auto headPaint = [&]() {
 		std::vector<PaintSource> src;
 		src.push_back({&pieces[0], [&](int f) { int s = headShell[f]; return s >= 0 ? shellSlot[s] : int(kSkin); }});
-		for (size_t i = 1; i < headPieces; i++) src.push_back({&pieces[i], [](int) { return int(kFeatures); }});
+		for (size_t i = 1; i < headPieces; i++) {
+			const std::vector<int>* fs = i - 1 < featureSlots.size() ? &featureSlots[i - 1] : nullptr;  // else glasses
+			src.push_back({&pieces[i], [fs](int f) { return fs ? (*fs)[f] : int(kBlack); }});
+		}
 		return src;
 	};
 	// Faces filled in after tagging carry 0: the shirt.
@@ -1343,6 +1394,7 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 		};
 		for (Mesh& m : pieces)
 			for (V3& p : m.v) p = rotate(p);
+		for (V3& p : sheet.mesh.v) p = rotate(p);
 
 		std::vector<Mesh> bodyParts = body.inHeadFrame();
 		std::vector<std::vector<int>> tags = body.faceTags();
@@ -1352,7 +1404,7 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 			setFaceTags(bodyParts[i], tags[i]);  // which piece each face goes to, if split
 			for (size_t f = 0; f < tags[i].size() && f < bodyParts[i].uv.size(); f++) {
 				// Its filament slot rides in v (u is the split tag).
-				int slot = tags[i][f] == kTagLegs ? kPants : tags[i][f] == kTagNeck || hands[i][f] ? kSkin : kShirt;
+				int slot = tags[i][f] == kTagLegs ? kBlack : tags[i][f] == kTagNeck || hands[i][f] ? kSkin : kShirt;
 				for (V2& c : bodyParts[i].uv[f]) c.v = float(slot);
 			}
 			b.append(bodyParts[i]);
@@ -1372,7 +1424,9 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 		tick("body");
 		if (o.make == Make::Bobblehead) {
 			double dropped = 0;
+			const double z0 = pieces[0].v[0].z;
 			Mesh all = bobblehead(pieces, b, unit, o, log, tick, dropped);
+			for (V3& p : sheet.mesh.v) p.z += pieces[0].v[0].z - z0;  // raised with the head
 			std::vector<uint8_t> stl = exportSTL(all);
 			tick("export");
 			if (o.mmu) {
@@ -1386,7 +1440,8 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 				}
 				Mesh placed = all;  // where it was made, before it was set down on the bed
 				for (V3& p : placed.v) p.z += dropped;
-				*o.mmu = export3MF(all, paintFaces(placed, src));
+				sheet.reach = 1.5 * unit / o.voxelsPerHead;
+				*o.mmu = export3MF(all, paintFaces(placed, src, &sheet));
 				tick("paint");
 			}
 			return stl;
@@ -1468,7 +1523,8 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 		size_t next = headPieces;
 		if (hasBody) src.push_back({&pieces[next++], bodyPaint});
 		for (; next < pieces.size(); next++) src.push_back({&pieces[next], [](int) { return int(kBase); }});
-		*o.mmu = export3MF(solid, paintFaces(solid, src));
+		sheet.reach = 1.5 * voxel;
+		*o.mmu = export3MF(solid, paintFaces(solid, src, &sheet));
 		tick("paint");
 	}
 	return stl;

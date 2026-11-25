@@ -214,7 +214,7 @@ int fillHoles(Mesh& m) {
 	return filled;
 }
 
-static void subdivideOnce(Mesh& m) {
+static void subdivideOnce(Mesh& m, bool smooth) {
 	const int V = (int)m.v.size();
 	auto he = sortedHalfEdges(m);
 	struct Edge {
@@ -261,7 +261,7 @@ static void subdivideOnce(Mesh& m) {
 	std::vector<V3> nv(V + edges.size());
 	for (int i = 0; i < V; i++) {
 		const V3& p = m.v[i];
-		if (odd[i] || count[i] == 0) {
+		if (!smooth || odd[i] || count[i] == 0) {
 			nv[i] = p;
 		} else if (bcount[i] == 0) {
 			int n = count[i];
@@ -276,7 +276,7 @@ static void subdivideOnce(Mesh& m) {
 	for (size_t e = 0; e < edges.size(); e++) {
 		const Edge& ed = edges[e];
 		V3 a = m.v[ed.a], b = m.v[ed.b];
-		if (ed.faces == 2)
+		if (smooth && ed.faces == 2)
 			nv[V + e] = (a + b) * 0.375 + (m.v[ed.opp0] + m.v[ed.opp1]) * 0.125;
 		else
 			nv[V + e] = (a + b) * 0.5;
@@ -309,8 +309,8 @@ static void subdivideOnce(Mesh& m) {
 	m.uv.swap(nuv);
 }
 
-void subdivide(Mesh& m, int levels) {
-	for (int i = 0; i < levels; i++) subdivideOnce(m);
+void subdivide(Mesh& m, int levels, int smoothLevels) {
+	for (int i = 0; i < levels; i++) subdivideOnce(m, i < smoothLevels);
 }
 
 std::vector<V3> vertexNormals(const Mesh& m) {

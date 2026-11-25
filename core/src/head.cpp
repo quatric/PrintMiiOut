@@ -83,7 +83,8 @@ bool solve3(double A[3][3], double b[3], double x[3]) {
 
 }  // namespace
 
-Mesh embossMask(const Mesh& mask, const Image& tex, const Mesh* faceline, const BVH* fbvh) {
+Mesh embossMask(const Mesh& mask, const Image& tex, const Mesh* faceline, const BVH* fbvh, Mesh* paint,
+                std::vector<int>* inks) {
 	Mesh out;
 	if (tex.empty() || tex.channels() < 4 || !mask.hasUV()) return out;
 	const int n = kEmbossSegments;
@@ -150,6 +151,31 @@ Mesh embossMask(const Mesh& mask, const Image& tex, const Mesh* faceline, const 
 		all[island[f]] += area;
 		if (kind[f] == Ink::Colour) colour[island[f]] += area;
 		if (kind[f] == Ink::Dark) ink[island[f]] += area;
+	}
+	if (paint && inks) {
+		// Eyes are the features with whites in them; a feature without any,
+		// above the eyes, is an eyebrow.
+		std::vector<double> light(count, 0.0), z(count, 0.0);
+		for (size_t f = 0; f < out.f.size(); f++) {
+			double area = triangleArea(out, (int)f);
+			if (kind[f] == Ink::Light) light[island[f]] += area;
+			const Tri& t = out.f[f];
+			z[island[f]] += area * (out.v[t[0]].z + out.v[t[1]].z + out.v[t[2]].z) / 3;
+		}
+		double eyes = 0, eyeArea = 0;
+		for (int i = 0; i < count; i++) {
+			z[i] /= std::max(all[i], 1e-12);
+			if (light[i] > 0 && ink[i] > 0) eyes += z[i] * all[i], eyeArea += all[i];
+		}
+		*paint = out;
+		paint->uv.clear();
+		inks->resize(out.f.size());
+		for (size_t f = 0; f < out.f.size(); f++) {
+			int i = island[f];
+			// Light eyebrows are all light, with no ink or colour.
+			bool brow = eyeArea > 0 && z[i] > eyes / eyeArea && (light[i] == 0 || (ink[i] == 0 && colour[i] == 0));
+			(*inks)[f] = brow ? kInkBrow : kind[f] == Ink::Light ? kInkWhite : kInkDark;
+		}
 	}
 	auto plateau = [&](int f) {
 		int i = island[f];
