@@ -787,6 +787,19 @@ Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Opt
 		dx *= most / off;
 		dy *= most / off;
 	}
+	// But not so far that the post reaches the neck's edge that way, where
+	// the shirt curves in under it and leaves a notch beside the post.
+	if (off > 1e-9) {
+		const double ux = dx / std::hypot(dx, dy), uy = dy / std::hypot(dx, dy);
+		double edge = 0;  // how far the neck reaches that way
+		for (size_t i = 0; i < body.v.size(); i++) {
+			if (!neck[i]) continue;
+			double vx = body.v[i].x - cx, vy = body.v[i].y - cy, r = std::hypot(vx, vy);
+			if (r > 1e-9 && (vx * ux + vy * uy) > 0.9 * r) edge = std::max(edge, vx * ux + vy * uy);
+		}
+		const double room = std::max(0.0, edge - rp - 0.8), now = std::hypot(dx, dy);
+		if (edge > 0 && now > room) dx *= room / now, dy *= room / now;
+	}
 	double ax = cx + dx, ay = cy + dy;
 	const double Rr = rb + c, apexAbove = Rr / std::sin(alpha), wall = 1.6;
 	// The post and its knob: a cone under the knob (no flatter than alpha)
