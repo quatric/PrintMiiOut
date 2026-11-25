@@ -8,7 +8,8 @@ transfers, tags and signs that are not stickers. Where each label sits on
 its sheet comes from LibreOffice's label database, or failing that from
 gLabels' templates; the few that neither has were measured from Avery's own
 templates (HAND). Every layout is checked against the size Print Shop gives
-and against the paper.
+and against the paper. After those come every other Avery and Zweckform
+sheet of labels either database has, less the cards, tabs and disk labels.
 
   python tools/labels.py LIBREOFFICE_LABELS_XML GLABELS_TEMPLATE_XML... > static/client/labels.json
 
@@ -37,6 +38,14 @@ SKIP = re.compile(
     r"Flourish|Star|Bubble|Piggyback|Paper Receipt|Notes|Price|Heavy Duty|Durable|Security|Warning|"
     r"Weatherproof|Kraft|Metallic|Foil|Notarial|Seal|Clear|Neon|Fluoro|Glossy|Textile|Glass|Decal|QR Code|"
     r"A5 |Border Sticker|^L4726",
+    re.I,
+)
+
+# More not-stickers among the sheets Print Shop does not list, some in German.
+EXTRA_SKIP = re.compile(
+    r"Card|Karte|Visitenkarten|Diskette|Disk|Divider|Tabs?\b|Index|Binder|Spine|Ordner|Box File|\bCD|DVD|Video|"
+    r"Cassette|Tape|Zip|MiniDisc|Mini Disc|Cartridge|Photo|Dia-|Cover|Magnet|Tamper|Contents|Portfolio|Filing|"
+    r"Compliment|Eurofolio|Regal|Transparent|Folien",
     re.I,
 )
 
@@ -116,7 +125,7 @@ def printshop(paper: str):
 def libreoffice(path):
     """{part: [layout, ...]} from labels.xml, in mm; LibreOffice keeps
     hundredths of a mm: across;down;width;height;left;top;columns;rows;paper."""
-    out = {"letter": {}, "a4": {}}
+    out = {"letter": {}, "a4": {}, "desc": {}}
     root = ET.parse(path).getroot()
     for m in root.iter("manufacturer"):
         paper = {"Avery Letter Size": "letter", "Avery A4": "a4", "Avery Zweckform": "a4"}.get(m.get("name"))
@@ -131,7 +140,8 @@ def libreoffice(path):
                      dy=v[1])
             if abs(v[8] - PAPER[paper][0]) > 1 or abs(v[9] - PAPER[paper][1]) > 1:
                 continue
-            part = label.findtext("name").split()[0]
+            part, _, desc = label.findtext("name").partition(" ")
+            out["desc"].setdefault(part, desc)
             out[paper].setdefault(part, []).append(g)
     return out
 
@@ -148,7 +158,7 @@ def length(v):
 
 def glabels(paths):
     """{part: [layout]} from gLabels templates, one label kind, one layout."""
-    out = {"letter": {}, "a4": {}}
+    out = {"letter": {}, "a4": {}, "desc": {}}
     equiv = {}
     for path in paths:
         for t in ET.parse(path).getroot().iter("Template"):
@@ -181,6 +191,7 @@ def glabels(paths):
             g.update(cols=int(L.get("nx")), rows=int(L.get("ny")), x=length(L.get("x0")), y=length(L.get("y0")),
                      dx=length(L.get("dx")), dy=length(L.get("dy")))
             out[paper].setdefault(t.get("part"), []).append(g)
+            out["desc"].setdefault(t.get("part"), (t.get("_description") or t.get("description") or "").capitalize())
     for part, to in equiv.items():
         for paper in out:
             if to in out[paper]:
@@ -201,6 +212,49 @@ def fits(g, want, paper):
     right = g["x"] + (g["cols"] - 1) * g["dx"] + g["w"]
     bottom = g["y"] + (g["rows"] - 1) * g["dy"] + g["h"]
     return g["x"] >= -0.05 and g["y"] >= -0.05 and right <= pw + 0.1 and bottom <= ph + 0.1
+
+
+def sheet(g, paper):
+    """g tidied: rounded, and one page-sized label made a whole sheet."""
+    pw, ph = PAPER[paper]
+    if g["shape"] != "sheet" and g["cols"] * g["rows"] == 1 and g["w"] > pw - 20 and g["h"] > ph - 20:
+        g["shape"] = "sheet"  # one label the size of the page
+    return {k: round(v, 3) if isinstance(v, float) else v for k, v in g.items()}
+
+
+def key(g):
+    # Layouts within half a millimetre of each other are one sheet.
+    return (g["shape"], g["cols"], g["rows"]) + tuple(round(g[k] * 2) for k in ("w", "h", "x", "y", "dx", "dy"))
+
+
+def kind(desc):
+    return "N" if re.search(r"Badge", desc, re.I) else "A" if re.search(r"Address|Shipping|Mailing", desc, re.I) else "O"
+
+
+def extras(paper, lo, gl, groups):
+    """Every other Avery sheet either database has, past Print Shop's list:
+    gLabels first, which keeps the shape, then LibreOffice."""
+    have = {p for e in groups.values() for p in e["parts"]}
+    for db in (gl, lo):
+        for part, cands in db[paper].items():
+            desc = gl["desc"].get(part) or lo["desc"].get(part) or "Label"
+            base = part.split(".")[0]  # gLabels' 3274.1, .2: one sheet's kinds
+            if part in have or base in have or SKIP.search(desc) or EXTRA_SKIP.search(desc) or SKIP.search(part) or MINI.match(base):
+                continue
+            g = cands[0]
+            if g["shape"] == "rect" and re.search(r"Round|Circ|Kreis|\brund", desc, re.I):
+                g = dict(g, shape="round", r=0)  # LibreOffice keeps no shape
+            elif g["shape"] == "rect" and re.search(r"Oval", desc, re.I):
+                g = dict(g, shape="oval", r=0)
+            if g["r"] is None:
+                g = dict(g, r=1.5)
+            if not fits(g, ((min(g["w"], g["h"]), max(g["w"], g["h"])), False), paper):
+                continue
+            g = sheet(dict(g), paper)
+            entry = groups.setdefault(key(g), dict(parts=[], desc=desc, kind=kind(desc), **g))
+            if base not in entry["parts"]:
+                entry["parts"].append(base)
+            have.add(part)
 
 
 def main(lo_path, gl_paths):
@@ -235,16 +289,12 @@ def main(lo_path, gl_paths):
                 g["shape"] = "oval"
             if g["r"] is None:
                 g["r"] = known[0]["r"] if known and known[0]["shape"] == "rect" else (0 if g["shape"] != "rect" else 1.5)
-            pw, ph = PAPER[paper]
-            if g["shape"] != "sheet" and g["cols"] * g["rows"] == 1 and g["w"] > pw - 20 and g["h"] > ph - 20:
-                g["shape"] = "sheet"  # one label the size of the page
-            g = {k: round(v, 3) if isinstance(v, float) else v for k, v in g.items()}
-            # Layouts within half a millimetre of each other are one sheet.
-            key = (g["shape"], g["cols"], g["rows"]) + tuple(round(g[k] * 2) for k in ("w", "h", "x", "y", "dx", "dy"))
-            entry = groups.setdefault(key, dict(parts=[], desc=desc, kind=kind, **g))
+            g = sheet(g, paper)
+            entry = groups.setdefault(key(g), dict(parts=[], desc=desc, kind=kind, **g))
             for part in parts:
                 if part not in entry["parts"]:
                     entry["parts"].append(part)
+        extras(paper, lo, gl, groups)
         out[paper] = list(groups.values())
     for m in missing:
         print("no layout:", m, file=sys.stderr)

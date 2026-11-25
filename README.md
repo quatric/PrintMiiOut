@@ -50,7 +50,7 @@ pip install fonttools
 python tools/subset_font.py ~/Library/Fonts.old/FOT-RodinNTLGPro-B.otf static/fonts/RodinNTLGPro-B-print.otf
 ```
 
-The label sheets (`static/client/labels.json`) are the ones The Print Shop 4 lists (`tools/labels/printshop-*.txt`), with each sheet's layout from LibreOffice's label database or gLabels' templates, and the few in neither from the margins on Avery's product pages; every layout is checked against Print Shop's label size and the paper:
+The label sheets (`static/client/labels.json`) are the ones The Print Shop 4 lists (`tools/labels/printshop-*.txt`), with each sheet's layout from LibreOffice's label database or gLabels' templates, and the few in neither from the margins on Avery's product pages; every layout is checked against Print Shop's label size and the paper. Every other Avery and Zweckform sticker sheet in either database follows:
 
 ```bash
 python tools/labels.py labels.xml avery-us-templates.xml avery-iso-templates.xml > static/client/labels.json
