@@ -1358,7 +1358,7 @@
     setStage('progress');
 
     try {
-      const { buildInBrowser } = await import("{{ url_for('static', filename='client/browser-build.js') }}");
+      const { buildInBrowser } = await import("{{ url_for('static', filename='client/browser-build.js', v=client_version) }}");
       let built = await buildInBrowser(fd, text => { statusText.textContent = text; }, print);
       // An older cached browser-build.js hands back the Blob itself.
       if (built instanceof Blob) built = { file: built, previews: [], pages: printed ? 1 : 0 };
@@ -1367,7 +1367,7 @@
       downloadLink.href = builtUrl;
       downloadLink.download = printed ? `printmiiout-${choice.make}.pdf`
         : `printmiiout${choice.make === 'figure' ? '' : '-' + choice.make}.${built.model ? '3mf' : 'stl'}`;
-      downloadLink.textContent = printed ? 'Download PDF' : 'Download STL File';
+      downloadLink.textContent = printed ? 'Download PDF' : built.model ? 'Download 3MF File' : 'Download STL File';
       document.getElementById('result-say').textContent = {
         stickers: 'Your stickers are ready!', towel: 'Your towel is ready!', shirt: 'Your shirt is ready!',
       }[choice.make] || 'Your Mii is ready!';

@@ -79,7 +79,8 @@ async function fetchBytes(url, what) {
 
 /** Runs one job in a fresh worker; resolves to what it hands back. */
 function inWorker(message, transfer, onLog) {
-	const worker = new Worker(new URL('worker.js', import.meta.url), { type: 'module' });
+	// The page's version rides along, down to the module and its .wasm.
+	const worker = new Worker(new URL('worker.js' + new URL(import.meta.url).search, import.meta.url), { type: 'module' });
 	return new Promise((resolve, reject) => {
 		worker.onmessage = ({ data }) => {
 			if (data.type === 'log') onLog && onLog(data.line);

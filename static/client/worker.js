@@ -13,7 +13,14 @@
 //   Out: { type: 'done', pdf, previews } (previews: a PNG Blob of each page,
 //        or none if the browser cannot draw them here) or
 //        { type: 'error', message }
-import createPrintMiiOut from './printmiiout-core.js';
+// The version the page asked for (?v=...), so the module and its .wasm always match.
+const version = new URL(self.location.href).search;
+// Imported when needed, not with a top-level await, which would hold back
+// onmessage until it settles and lose the message that starts the build.
+const createPrintMiiOut = async () => {
+	const { default: createModule } = await import(`./printmiiout-core.js${version}`);
+	return createModule({ locateFile: (file) => new URL(file + version, import.meta.url).href });
+};
 
 async function print({ make, photo, head, mask, font, options }) {
 	const core = await createPrintMiiOut();

@@ -288,7 +288,20 @@ def _body_for(raw, body_type: str, proportions: str) -> tuple[str, int, int]:
 
 @app.route("/", methods=["GET"])
 def index():
-    return render_template("index.html")
+    return render_template("index.html", client_version=_client_version())
+
+
+def _client_version() -> str:
+    """Changes whenever a browser-side module does, so a browser never pairs
+    an old printmiiout-core.js with a new .wasm (or the other way round)."""
+    import hashlib
+    folder = os.path.join(app.static_folder, "client")
+    h = hashlib.sha1()
+    for name in sorted(os.listdir(folder)):
+        if name.endswith((".js", ".wasm")):
+            st = os.stat(os.path.join(folder, name))
+            h.update(f"{name}:{st.st_size}:{st.st_mtime_ns}".encode())
+    return h.hexdigest()[:12]
 
 
 @app.after_request
