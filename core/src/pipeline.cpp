@@ -875,7 +875,20 @@ Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Opt
 	compact(body);
 	fillHoles(body);
 
-	std::vector<std::pair<double, double>> profile{{0, zPost}, {rp, zPost}, {rp, zk0}, {rb, zk1}, {rb, pz}};
+	// Below the head the post is as thick as the neck it replaces, so it looks
+	// like one and doesn't snap there; it narrows at 45 degrees (no support)
+	// to the thin post only just under the head, clear of it as it rocks.
+	const double rs = std::max(rp, 0.85 * neckRadius - std::hypot(ax - cx, ay - cy));
+	const double zNarrow = headBottom - clearOfBody;
+	std::vector<std::pair<double, double>> profile{{0, zPost}, {rp, zPost}};
+	if (rs > rp + 0.5 && zNarrow < zk0 && zNarrow - (rs - rp) > zPost + 1) {
+		std::snprintf(buf, sizeof buf, "Bobblehead: neck %.2f thick up to %.2f under the head", 2 * rs, clearOfBody + rs - rp);
+		log(buf);
+		profile.push_back({rs, zPost});
+		profile.push_back({rs, zNarrow - (rs - rp)});
+		profile.push_back({rp, zNarrow});
+	}
+	profile.insert(profile.end(), {{rp, zk0}, {rb, zk1}, {rb, pz}});
 	for (int k = 1; k < 16; k++) {
 		double a = M_PI / 2 * k / 16;
 		profile.push_back({rb * std::cos(a), pz + rb * std::sin(a)});
