@@ -177,6 +177,7 @@ export async function buildInBrowser(form, onStatus, print = {}) {
 			base: job.base !== false,
 			split: make === 'figure' && !!job.split,
 			mmu: !!job.mmu,
+			mmuSlots: job.mmu_slots || 5,
 			hairSmoothing: job.hair_smoothing ?? 3,
 			fit: Number(job.fit) || 0,
 			size: Number(job.size) || 0,

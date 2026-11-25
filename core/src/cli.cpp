@@ -2,7 +2,7 @@
 // browser.
 //
 //   printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb miiBodyM.glb]
-//                    [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM] [--mmu OUT.3mf] [--hair-smoothing 0-3]
+//                    [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM] [--mmu OUT.3mf] [--mmu-slots 4|5|7] [--hair-smoothing 0-3]
 //                    [--make figure|bobblehead|coin|keychain|stamp|square-stamp|articulated]
 //                    [--size MM] [--square] [--face-shape] [--keychain] [--no-rim] [--engraved] [--border none|line|dashed]
 //                    [--text TEXT --font font.otf] [--text-below]
@@ -65,6 +65,8 @@ int main(int argc, char** argv) {
 			o.split = o.assembled = true;
 		else if (a == "--hair-smoothing")
 			o.hairSmoothing = std::atoi(next().c_str());
+		else if (a == "--mmu-slots")
+			o.mmuSlots = std::atoi(next().c_str());
 		else if (a == "--mmu")
 			mmuPath = next();
 		else if (a == "--fit")
@@ -120,7 +122,7 @@ int main(int argc, char** argv) {
 	if (pos.size() != 2) {
 		std::fprintf(stderr,
 		             "usage: printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb body.glb]\n"
-		             "       [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM] [--mmu OUT.3mf] [--hair-smoothing 0-3]\n"
+		             "       [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM] [--mmu OUT.3mf] [--mmu-slots 4|5|7] [--hair-smoothing 0-3]\n"
 		             "       [--make figure|bobblehead|coin|keychain|stamp|square-stamp|articulated]\n"
 		             "       [--size MM] [--square] [--face-shape] [--keychain] [--no-rim] [--engraved] [--border none|line|dashed]\n"
 		             "       [--text TEXT --font font.otf] [--text-below]\n"

@@ -68,6 +68,7 @@ val generate(val head, val mask, val body, val options) {
 		if (options["fit"].isNumber()) o.fit = options["fit"].as<double>();
 		if (options["voxelsPerHead"].isNumber()) o.voxelsPerHead = options["voxelsPerHead"].as<double>();
 		if (options["hairSmoothing"].isNumber()) o.hairSmoothing = options["hairSmoothing"].as<int>();
+		if (options["mmuSlots"].isNumber()) o.mmuSlots = options["mmuSlots"].as<int>();
 		std::vector<uint8_t> mmu;
 		if (!options["mmu"].isUndefined() && options["mmu"].as<bool>()) o.mmu = &mmu;
 		if (options["maxTriangles"].isNumber()) o.maxTriangles = size_t(options["maxTriangles"].as<double>());

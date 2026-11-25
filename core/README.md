@@ -30,6 +30,7 @@ The fuse works like a voxel remesh. It measures the distance to every part on a 
 | Font | `--font font.otf` | `font` (Uint8Array) | needed for text |
 | Text below | `--text-below` | `textBelow` | a straight line below the face instead of round (or above) it |
 | Hair smoothing | `--hair-smoothing 0-3` | `hairSmoothing` | Loop smoothing passes on hair and beard (3); fewer keep the model's own strands and edges |
+| Filaments for it | `--mmu-slots 4\|5\|7` | `mmuSlots` | 5 (the default, as many as a Prusa MMU3): the base with the skin, the eyebrows with the hair; 4: the eye whites with the skin too |
 | Multi-material 3MF | `--mmu OUT.3mf` | `mmu: true` (result in `threemf`) | a figure, head or bobblehead (not split), each face painted the slot of the part it was made from: 1 skin, 2 hair, 3 black (pupils, mouth, glasses, trousers), 4 shirt and hat, 5 white (eye whites, read from the face texture), 6 eyebrows (features above the eyes), 7 base or keychain loop. Read by PrusaSlicer (`slic3rpe:mmu_segmentation`) and Bambu Studio and OrcaSlicer (`paint_color`) |
 
 ## Building

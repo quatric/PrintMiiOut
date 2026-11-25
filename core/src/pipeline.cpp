@@ -1111,7 +1111,13 @@ void zipAdd(std::vector<uint8_t>& out, std::vector<uint8_t>& dir, uint16_t& coun
 
 /** A 3MF of m, each face painted its slot the way PrusaSlicer
  *  (slic3rpe:mmu_segmentation) and Bambu Studio and OrcaSlicer (paint_color) read it. */
-std::vector<uint8_t> export3MF(const Mesh& m, const std::vector<int>& slots) {
+std::vector<uint8_t> export3MF(const Mesh& m, std::vector<int> slots, int filaments) {
+	// Fewer filaments: the base goes with the skin and the eyebrows with the hair, then the white with the skin.
+	for (int& s : slots) {
+		if (filaments < 7 && s == kBase) s = kSkin;
+		if (filaments < 7 && s == kBrow) s = kHair;
+		if (filaments < 5 && s == kWhite) s = kSkin;
+	}
 	// A whole (unsplit) triangle: slots 1 and 2 are one hex digit, 3 to 16 two.
 	auto paint = [](int s) -> std::string {
 		if (s == 1) return "4";
@@ -1426,7 +1432,7 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 				Mesh placed = all;  // where it was made, before it was set down on the bed
 				for (V3& p : placed.v) p.z += dropped;
 				sheet.reach = 1.5 * unit / o.voxelsPerHead;
-				*o.mmu = export3MF(all, paintFaces(placed, src, &sheet));
+				*o.mmu = export3MF(all, paintFaces(placed, src, &sheet), o.mmuSlots);
 				tick("paint");
 			}
 			return stl;
@@ -1508,7 +1514,7 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 		if (hasBody) src.push_back({&pieces[next++], bodyPaint});
 		for (; next < pieces.size(); next++) src.push_back({&pieces[next], [](int) { return int(kBase); }});
 		sheet.reach = 1.5 * voxel;
-		*o.mmu = export3MF(solid, paintFaces(solid, src, &sheet));
+		*o.mmu = export3MF(solid, paintFaces(solid, src, &sheet), o.mmuSlots);
 		pieces.clear();
 		tick("paint");
 	}

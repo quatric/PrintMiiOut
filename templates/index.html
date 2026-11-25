@@ -646,7 +646,9 @@
             <span class="label" id="mmu-label">Colours</span>
             <div class="gender-row" role="group" aria-labelledby="mmu-label">
               <button class="gender-btn selected" data-mmu="off" type="button" aria-pressed="true">One filament</button>
-              <button class="gender-btn"          data-mmu="on"  type="button" aria-pressed="false">Multi-material</button>
+              <button class="gender-btn"          data-mmu="4"   type="button" aria-pressed="false">4 filaments</button>
+              <button class="gender-btn"          data-mmu="5"   type="button" aria-pressed="false">5</button>
+              <button class="gender-btn"          data-mmu="7"   type="button" aria-pressed="false">7</button>
             </div>
           </div>
           <div class="field-note field-wide" id="mmu-note" hidden>For printers that change filament by themselves (an AMS, an MMU or a toolchanger): a 3MF painted in seven slots, 1 skin, 2 hair, 3 black (pupils, mouth, glasses, trousers), 4 shirt and hat, 5 white (eye whites), 6 eyebrows, 7 base. Open it in Bambu Studio, OrcaSlicer or PrusaSlicer and pick a filament for each slot.</div>
@@ -972,7 +974,13 @@
     // Snap-together parts print one colour each, so they need no painting.
     const mmuField = document.getElementById('mmu-field');
     if (split) mmuField.hidden = true;
-    document.getElementById('mmu-note').hidden = mmuField.hidden || choice.mmu !== 'on';
+    const mmuNote = document.getElementById('mmu-note');
+    mmuNote.hidden = mmuField.hidden || choice.mmu === 'off';
+    mmuNote.textContent = 'For printers that change filament by themselves (an AMS, an MMU or a toolchanger): a 3MF painted in '
+      + { 4: 'four slots: 1 skin, eye whites and base, 2 hair and eyebrows, 3 black (pupils, mouth, glasses, trousers), 4 shirt and hat.',
+          5: 'five slots, as many as a Prusa MMU3: 1 skin and base, 2 hair and eyebrows, 3 black (pupils, mouth, glasses, trousers), 4 shirt and hat, 5 eye whites.',
+          7: 'seven slots: 1 skin, 2 hair, 3 black (pupils, mouth, glasses, trousers), 4 shirt and hat, 5 eye whites, 6 eyebrows, 7 base.' }[choice.mmu]
+      + ' Open it in Bambu Studio, OrcaSlicer or PrusaSlicer and pick a filament for each slot.';
     // The head alone stands on a flat cut instead of a base.
     const head = choice.make === 'head';
     document.getElementById('base-label').textContent = head ? 'Bottom' : 'Base';

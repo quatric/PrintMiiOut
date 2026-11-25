@@ -44,6 +44,7 @@ struct Options {
 	// Set: a figure, a head or a bobblehead also comes out here as a 3MF painted
 	// for a multi-material printer (see kSlotNames in pipeline.cpp).
 	std::vector<uint8_t>* mmu = nullptr;
+	int mmuSlots = 5;           // filaments it may use: 7, or 5 (base with skin, eyebrows with hair), or 4 (white with skin too)
 	std::function<void(const std::string&)> log;
 };
 

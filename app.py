@@ -419,7 +419,8 @@ def _parse_form() -> tuple[tuple[dict, dict] | None, str | None]:
         "proportions": proportions,
         "split": make == "figure" and request.form.get("pieces", "whole") == "split",
         "base": request.form.get("base", "on") != "off",
-        "mmu": request.form.get("mmu") == "on",
+        "mmu": request.form.get("mmu") in ("on", "4", "5", "7"),
+        "mmu_slots": int(request.form.get("mmu")) if request.form.get("mmu") in ("4", "5", "7") else 5,
         "hair": {"smooth": 3, "detailed": 1, "faceted": 0}.get(request.form.get("hair"), 3),
         "fit": fit,
         "size": size,
@@ -555,7 +556,7 @@ def resolve():
     elif c["make"] == "head":
         # The head alone: no body, and a flat cut under the chin for "base".
         job.update(body=None, height=miidata.AVERAGE, build=miidata.AVERAGE, split=False, base=c["base"],
-                   keychain=c["keychain"], mmu=c["mmu"], hair_smoothing=c["hair"])
+                   keychain=c["keychain"], mmu=c["mmu"], mmu_slots=c["mmu_slots"], hair_smoothing=c["hair"])
     else:
         body_type, height, build = _body_for(raw, c["body_type"], c["proportions"])
         job.update(
@@ -566,6 +567,7 @@ def resolve():
             base=c["base"],
             # Painted for a multi-material printer: a whole figure or a bobblehead.
             mmu=c["mmu"] and c["make"] in ("figure", "bobblehead") and not c["split"],
+            mmu_slots=c["mmu_slots"],
             hair_smoothing=c["hair"],
         )
         if c["make"] == "articulated":
