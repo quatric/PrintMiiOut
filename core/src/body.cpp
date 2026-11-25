@@ -224,6 +224,15 @@ std::vector<std::vector<int>> Body::faceTags() const {
 	return out;
 }
 
+std::vector<std::vector<char>> Body::handFaces() const {
+	auto wrist = [&](int node) { return node >= 0 && nodes_[node].name.rfind("wrist_", 0) == 0; };
+	std::vector<std::vector<char>> out(parts_.size());
+	for (size_t p = 0; p < parts_.size(); p++)
+		for (const Tri& t : parts_[p].f)
+			out[p].push_back(wrist(dominant_[p][t[0]]) + wrist(dominant_[p][t[1]]) + wrist(dominant_[p][t[2]]) >= 2);
+	return out;
+}
+
 V3 Body::jointInHeadFrame(const std::string& name) const {
 	int i = find(name);
 	if (i < 0 || !isJoint_[i]) throw std::runtime_error("body: no joint " + name);

@@ -164,7 +164,7 @@ export async function buildInBrowser(form, onStatus, print = {}) {
 	const transfer = [head.buffer, mask.buffer];
 	if (body) transfer.push(body.buffer);
 	if (font) transfer.push(font.buffer);
-	const { stl } = await inWorker({
+	const { stl, threemf } = await inWorker({
 		head: head.buffer,
 		mask: mask.buffer,
 		body: body ? body.buffer : null,
@@ -176,6 +176,7 @@ export async function buildInBrowser(form, onStatus, print = {}) {
 			build: job.build,
 			base: job.base !== false,
 			split: make === 'figure' && !!job.split,
+			mmu: !!job.mmu,
 			fit: Number(job.fit) || 0,
 			size: Number(job.size) || 0,
 			square: job.shape === 'square',
@@ -191,5 +192,8 @@ export async function buildInBrowser(form, onStatus, print = {}) {
 		const stage = /^\[\s*[\d.]+s\] (.+?): /.exec(line);
 		if (stage && stages[stage[1]]) onStatus(stages[stage[1]]);
 	});
-	return { file: new Blob([stl], { type: 'model/stl' }), previews: [], pages: 0 };
+	const model = new Blob([stl], { type: 'model/stl' });
+	// Multi-material: the 3MF is the download, the STL still drives the 3D view.
+	if (threemf) return { file: new Blob([threemf], { type: 'model/3mf' }), model, previews: [], pages: 0 };
+	return { file: model, previews: [], pages: 0 };
 }

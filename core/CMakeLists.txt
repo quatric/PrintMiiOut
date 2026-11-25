@@ -70,6 +70,14 @@ add_library(pmo_core STATIC
 	src/pipeline.cpp)
 target_include_directories(pmo_core PUBLIC src third_party)
 target_link_libraries(pmo_core PUBLIC assimp::assimp)
+# zlib deflates the multi-material 3MF: the copy assimp builds, or the system's.
+if(TARGET zlibstatic)
+	target_link_libraries(pmo_core PRIVATE zlibstatic)
+	target_include_directories(pmo_core PRIVATE ${assimp_SOURCE_DIR}/contrib/zlib ${assimp_BINARY_DIR}/contrib/zlib)
+else()
+	find_package(ZLIB REQUIRED)
+	target_link_libraries(pmo_core PRIVATE ZLIB::ZLIB)
+endif()
 
 if(EMSCRIPTEN)
 	add_executable(printmiiout-core src/wasm_api.cpp)

@@ -38,6 +38,8 @@ public:
 	/** Per part, per face: which piece of a split figure it belongs to
 	 *  (a Tag from split.hpp), from the part and the bones its corners follow. */
 	std::vector<std::vector<int>> faceTags() const;
+	/** Per part, per face: 1 where the face is a hand (follows a wrist), for colouring. */
+	std::vector<std::vector<char>> handFaces() const;
 
 	/** A joint's position in the frame inHeadFrame() uses. Throws if there is none. */
 	V3 jointInHeadFrame(const std::string& name) const;

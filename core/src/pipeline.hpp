@@ -40,6 +40,9 @@ struct Options {
 	Bytes font;                 // an OpenType font for the text (Rodin NTLG on the site)
 	double voxelsPerHead = 240;   // fuse resolution, across the head's width
 	size_t maxTriangles = 600000;
+	// Set: a figure, a head or a bobblehead also comes out here as a 3MF painted
+	// for a multi-material printer (see kSlotNames in pipeline.cpp).
+	std::vector<uint8_t>* mmu = nullptr;
 	std::function<void(const std::string&)> log;
 };
 

@@ -21,7 +21,7 @@ void thickenHair(Mesh& hair);
 
 /** Join the opaque shells (face, forehead, nose, hair, hat), weld their
  *  seams and close what stays open. */
-Mesh mergeHead(std::vector<Mesh>& opaque, bool closeNeck);
+Mesh mergeHead(std::vector<Mesh>& opaque, bool closeNeck, std::vector<int>* shellOf = nullptr);
 
 /** The glasses as a flat plate cut from their texture, resting on the face
  *  with temple arms. Empty if there is no frame to cut. */

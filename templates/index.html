@@ -634,6 +634,14 @@
               <button class="gender-btn"          data-base="off" type="button" aria-pressed="false" id="base-off">No base</button>
             </div>
           </div>
+          <div class="field" id="mmu-field" data-makes="figure bobblehead head">
+            <span class="label" id="mmu-label">Colours</span>
+            <div class="gender-row" role="group" aria-labelledby="mmu-label">
+              <button class="gender-btn selected" data-mmu="off" type="button" aria-pressed="true">One filament</button>
+              <button class="gender-btn"          data-mmu="on"  type="button" aria-pressed="false">Multi-material</button>
+            </div>
+          </div>
+          <div class="field-note field-wide" id="mmu-note" hidden>For printers that change filament by themselves (an AMS, an MMU or a toolchanger): a 3MF painted in six slots, 1 skin, 2 hair, 3 eyes and glasses, 4 shirt and hat, 5 trousers, 6 base. Open it in Bambu Studio, OrcaSlicer or PrusaSlicer and pick a filament for each slot.</div>
           <div class="field" data-makes="head coin square-stamp" hidden>
             <span class="label" id="keychain-label">Keychain loop</span>
             <div class="gender-row" role="group" aria-labelledby="keychain-label">
@@ -886,7 +894,7 @@
 
   // ── What to make, and the choices that go with it ─────────────────────────
   const choice = {
-    make: 'figure', gender: 'auto', proportions: 'mii', pieces: 'whole', base: 'on',
+    make: 'figure', gender: 'auto', proportions: 'mii', pieces: 'whole', base: 'on', mmu: 'off',
     shape: 'round', rim: 'on', keychain: 'off', relief: 'raised', border: 'none', lettering: 'name', textpos: 'above',
     paper: 'letter', facestyle: 'photo', theme: 'classic', ink: 'blue', outlines: 'off', mirror: 'off',
   };
@@ -953,6 +961,10 @@
     note.hidden = !m.note;
     const split = choice.make === 'figure' && choice.pieces === 'split';
     document.getElementById('pieces-note').hidden = !split;
+    // Snap-together parts print one colour each, so they need no painting.
+    const mmuField = document.getElementById('mmu-field');
+    if (split) mmuField.hidden = true;
+    document.getElementById('mmu-note').hidden = mmuField.hidden || choice.mmu !== 'on';
     // The head alone stands on a flat cut instead of a base.
     const head = choice.make === 'head';
     document.getElementById('base-label').textContent = head ? 'Bottom' : 'Base';
@@ -1242,6 +1254,7 @@
     fd.append('proportions', choice.proportions);
     fd.append('pieces', choice.pieces);
     fd.append('base', choice.base);
+    fd.append('mmu', choice.mmu);
     fd.append('fit', fitInput.value);
     if (['head', 'coin', 'square-stamp'].includes(choice.make)) fd.append('keychain', choice.keychain);
     const flat = ['coin', 'keychain', 'stamp', 'square-stamp'].includes(choice.make);
@@ -1336,7 +1349,7 @@
       builtUrl = URL.createObjectURL(built.file);
       downloadLink.href = builtUrl;
       downloadLink.download = printed ? `printmiiout-${choice.make}.pdf`
-        : choice.make === 'figure' ? 'printmiiout.stl' : `printmiiout-${choice.make}.stl`;
+        : `printmiiout${choice.make === 'figure' ? '' : '-' + choice.make}.${built.model ? '3mf' : 'stl'}`;
       downloadLink.textContent = printed ? 'Download PDF' : 'Download STL File';
       document.getElementById('result-say').textContent = {
         stickers: 'Your stickers are ready!', towel: 'Your towel is ready!', shirt: 'Your shirt is ready!',
@@ -1406,7 +1419,7 @@
         preview.hidden = printView.hidden = false;
       } else {
         const { viewModel } = await import("{{ url_for('static', filename='client/viewer.js') }}");
-        const buffer = await built.file.arrayBuffer();
+        const buffer = await (built.model || built.file).arrayBuffer();
         preview.hidden = modelView.hidden = false;
         const leaf = getComputedStyle(document.documentElement).getPropertyValue('--leaf').trim() || '#8fd14f';
         viewer = viewModel(modelView, buffer, { color: leaf, label: '3D view of your Mii' });

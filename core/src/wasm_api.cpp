@@ -10,7 +10,9 @@
 //       log: (line) => console.log(line)
 //   });
 //   if (result.error) throw new Error(result.error);
-//   // result.stl is a Uint8Array holding a binary STL
+//   // result.stl is a Uint8Array holding a binary STL; with mmu: true (a
+//   // figure, head or bobblehead, not split), result.threemf holds the same
+//   // print as a 3MF painted for a multi-material printer
 //
 // headGlb, maskPng and bodyGlb are Uint8Arrays; maskPng and bodyGlb may be
 // empty (no body when options.body is unset, and none for coins and
@@ -65,6 +67,8 @@ val generate(val head, val mask, val body, val options) {
 		if (!options["assembled"].isUndefined()) o.assembled = options["assembled"].as<bool>();
 		if (options["fit"].isNumber()) o.fit = options["fit"].as<double>();
 		if (options["voxelsPerHead"].isNumber()) o.voxelsPerHead = options["voxelsPerHead"].as<double>();
+		std::vector<uint8_t> mmu;
+		if (!options["mmu"].isUndefined() && options["mmu"].as<bool>()) o.mmu = &mmu;
 		if (options["maxTriangles"].isNumber()) o.maxTriangles = size_t(options["maxTriangles"].as<double>());
 		if (options["make"].isString()) {
 			std::string m = options["make"].as<std::string>();
@@ -99,6 +103,8 @@ val generate(val head, val mask, val body, val options) {
 		                                         {bd.data(), bd.size()}, o);
 		// new Uint8Array(view) copies out of the module's memory.
 		result.set("stl", val::global("Uint8Array").new_(emscripten::typed_memory_view(stl.size(), stl.data())));
+		if (!mmu.empty())
+			result.set("threemf", val::global("Uint8Array").new_(emscripten::typed_memory_view(mmu.size(), mmu.data())));
 	} catch (const std::exception& e) {
 		result.set("error", std::string(e.what()));
 	}

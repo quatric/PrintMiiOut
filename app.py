@@ -419,6 +419,7 @@ def _parse_form() -> tuple[tuple[dict, dict] | None, str | None]:
         "proportions": proportions,
         "split": make == "figure" and request.form.get("pieces", "whole") == "split",
         "base": request.form.get("base", "on") != "off",
+        "mmu": request.form.get("mmu") == "on",
         "fit": fit,
         "size": size,
         "shape": request.form.get("shape") if request.form.get("shape") in ("square", "face") else "round",
@@ -553,7 +554,7 @@ def resolve():
     elif c["make"] == "head":
         # The head alone: no body, and a flat cut under the chin for "base".
         job.update(body=None, height=miidata.AVERAGE, build=miidata.AVERAGE, split=False, base=c["base"],
-                   keychain=c["keychain"])
+                   keychain=c["keychain"], mmu=c["mmu"])
     else:
         body_type, height, build = _body_for(raw, c["body_type"], c["proportions"])
         job.update(
@@ -562,6 +563,8 @@ def resolve():
             build=build,
             split=c["split"],
             base=c["base"],
+            # Painted for a multi-material printer: a whole figure or a bobblehead.
+            mmu=c["mmu"] and c["make"] in ("figure", "bobblehead") and not c["split"],
         )
         if c["make"] == "articulated":
             job["size"] = c["size"]

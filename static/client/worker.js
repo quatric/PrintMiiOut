@@ -65,7 +65,9 @@ self.onmessage = async (event) => {
 			}
 		);
 		if (result.error) throw new Error(result.error);
-		self.postMessage({ type: 'done', stl: result.stl.buffer }, [result.stl.buffer]);
+		const threemf = result.threemf ? result.threemf.buffer : null;
+		self.postMessage({ type: 'done', stl: result.stl.buffer, threemf },
+			threemf ? [result.stl.buffer, threemf] : [result.stl.buffer]);
 	} catch (err) {
 		self.postMessage({ type: 'error', message: String((err && err.message) || err) });
 	}

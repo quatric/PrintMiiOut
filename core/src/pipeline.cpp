@@ -1,5 +1,6 @@
 #include "pipeline.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -8,6 +9,7 @@
 #include <map>
 #include <memory>
 #include <stdexcept>
+#include <zlib.h>
 
 #include <assimp/Exporter.hpp>
 #include <assimp/Importer.hpp>
@@ -701,7 +703,8 @@ void finishWithCuts(Mesh& solid, const std::vector<Cut>& cuts, double voxel, siz
  *  the knob, so the head never comes off. Every overhang inside is steep
  *  enough to print without support. */
 Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Options& o,
-                const std::function<void(const std::string&)>& log, const std::function<void(const char*)>& tick) {
+                const std::function<void(const std::string&)>& log, const std::function<void(const char*)>& tick,
+                double& dropped) {
 	char buf[256];
 	const double voxel = unit / o.voxelsPerHead;
 	const double loosen = std::clamp(o.fit, -0.2, 0.5);
@@ -884,6 +887,7 @@ Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Opt
 	V3 lo, hi;
 	all.bounds(lo, hi);
 	for (V3& p : all.v) p.z -= lo.z;
+	dropped = lo.z;
 	std::snprintf(buf, sizeof buf, "Printable: head and body in place, %zu faces, %d non-manifold edges", all.f.size(),
 	              countNonManifoldEdges(all));
 	log(buf);
@@ -1017,6 +1021,118 @@ Mesh articulatedMii(std::vector<Part>& parts, Bytes maskBytes, Bytes bodyBytes, 
 	std::snprintf(buf, sizeof buf, "Printable: %zu faces, %d non-manifold edges", m.f.size(), countNonManifoldEdges(m));
 	log(buf);
 	return m;
+}
+
+// Multi-material: each face of the print is painted the filament slot of the
+// nearest part it was made from. Slots count from 1, as slicers number them.
+enum Slot : int { kSkin = 1, kHair, kFeatures, kShirt, kPants, kBase };
+
+struct PaintSource {
+	const Mesh* mesh;
+	std::function<int(int)> slot;  // of a face of mesh
+};
+
+std::vector<int> paintFaces(const Mesh& out, const std::vector<PaintSource>& sources) {
+	// Every source in one tree, so each face takes a single lookup.
+	Mesh all;
+	std::vector<int> slotOf;
+	for (const PaintSource& s : sources) {
+		all.append(*s.mesh);
+		for (size_t f = 0; f < s.mesh->f.size(); f++) slotOf.push_back(s.slot(int(f)));
+	}
+	all.uv.clear();
+	BVH tree(all);
+	std::vector<int> slots(out.f.size(), kSkin);
+	for (size_t f = 0; f < out.f.size(); f++) {
+		const Tri& t = out.f[f];
+		int face = -1;
+		tree.closest((out.v[t[0]] + out.v[t[1]] + out.v[t[2]]) * (1.0 / 3), &face);
+		if (face >= 0) slots[f] = slotOf[face];
+	}
+	return slots;
+}
+
+/** One file stored deflated in a zip being written to out; adds its central record to dir. */
+void zipAdd(std::vector<uint8_t>& out, std::vector<uint8_t>& dir, uint16_t& count, const std::string& name,
+            const std::string& data) {
+	z_stream z{};
+	if (deflateInit2(&z, 6, Z_DEFLATED, -15, 8, Z_DEFAULT_STRATEGY) != Z_OK) throw std::runtime_error("3mf: zlib");
+	std::vector<uint8_t> packed(deflateBound(&z, uLong(data.size())));
+	z.next_in = (Bytef*)data.data();
+	z.avail_in = uInt(data.size());
+	z.next_out = packed.data();
+	z.avail_out = uInt(packed.size());
+	int r = deflate(&z, Z_FINISH);
+	deflateEnd(&z);
+	if (r != Z_STREAM_END) throw std::runtime_error("3mf: deflate failed");
+	packed.resize(z.total_out);
+	const uint32_t crc = uint32_t(crc32(0, (const Bytef*)data.data(), uInt(data.size())));
+	const uint32_t offset = uint32_t(out.size());
+	auto put = [](std::vector<uint8_t>& b, uint32_t v, int n) {
+		for (int i = 0; i < n; i++) b.push_back(uint8_t(v >> (8 * i)));
+	};
+	auto common = [&](std::vector<uint8_t>& b) {  // version needed .. name length
+		put(b, 20, 2), put(b, 0, 2), put(b, 8, 2), put(b, 0, 2), put(b, 0x21, 2);  // deflate, 1980-01-01
+		put(b, crc, 4), put(b, uint32_t(packed.size()), 4), put(b, uint32_t(data.size()), 4), put(b, uint32_t(name.size()), 2);
+	};
+	put(out, 0x04034b50, 4), common(out), put(out, 0, 2);
+	out.insert(out.end(), name.begin(), name.end());
+	out.insert(out.end(), packed.begin(), packed.end());
+	put(dir, 0x02014b50, 4), put(dir, 20, 2), common(dir);
+	put(dir, 0, 2), put(dir, 0, 2), put(dir, 0, 2), put(dir, 0, 2), put(dir, 0, 4), put(dir, offset, 4);
+	dir.insert(dir.end(), name.begin(), name.end());
+	count++;
+}
+
+/** A 3MF of m, each face painted its slot the way PrusaSlicer
+ *  (slic3rpe:mmu_segmentation) and Bambu Studio and OrcaSlicer (paint_color) read it. */
+std::vector<uint8_t> export3MF(const Mesh& m, const std::vector<int>& slots) {
+	// A whole (unsplit) triangle: slots 1 and 2 are one hex digit, 3 to 16 two.
+	auto paint = [](int s) -> std::string {
+		if (s == 1) return "4";
+		if (s == 2) return "8";
+		const char* hex = "0123456789ABCDEF";
+		return std::string{hex[std::clamp(s - 3, 0, 13)], 'C'};
+	};
+	std::string x;
+	x.reserve(m.v.size() * 48 + m.f.size() * 90 + 1024);
+	x += "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<model unit=\"millimeter\" xml:lang=\"en-US\" "
+	     "xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\" "
+	     "xmlns:slic3rpe=\"http://schemas.slic3r.org/3mf/2017/06\">\n"
+	     "<metadata name=\"Application\">PrintMiiOut</metadata>\n<resources>\n"
+	     "<object id=\"1\" name=\"Mii\" type=\"model\"><mesh><vertices>\n";
+	char buf[160];
+	for (const V3& p : m.v) {
+		std::snprintf(buf, sizeof buf, "<vertex x=\"%.4f\" y=\"%.4f\" z=\"%.4f\"/>\n", p.x, p.y, p.z);
+		x += buf;
+	}
+	x += "</vertices><triangles>\n";
+	for (size_t f = 0; f < m.f.size(); f++) {
+		std::string c = paint(slots[f]);
+		std::snprintf(buf, sizeof buf, "<triangle v1=\"%d\" v2=\"%d\" v3=\"%d\" paint_color=\"%s\" slic3rpe:mmu_segmentation=\"%s\"/>\n",
+		              m.f[f][0], m.f[f][1], m.f[f][2], c.c_str(), c.c_str());
+		x += buf;
+	}
+	x += "</triangles></mesh></object>\n</resources>\n<build><item objectid=\"1\"/></build>\n</model>\n";
+
+	std::vector<uint8_t> out, dir;
+	uint16_t count = 0;
+	zipAdd(out, dir, count, "[Content_Types].xml",
+	       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+	       "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+	       "<Default Extension=\"model\" ContentType=\"application/vnd.ms-package.3dmanufacturing-3dmodel+xml\"/></Types>\n");
+	zipAdd(out, dir, count, "_rels/.rels",
+	       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+	       "<Relationship Target=\"/3D/3dmodel.model\" Id=\"rel0\" "
+	       "Type=\"http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel\"/></Relationships>\n");
+	zipAdd(out, dir, count, "3D/3dmodel.model", x);
+	const uint32_t dirAt = uint32_t(out.size()), dirSize = uint32_t(dir.size());
+	out.insert(out.end(), dir.begin(), dir.end());
+	auto put = [&](uint32_t v, int n) {
+		for (int i = 0; i < n; i++) out.push_back(uint8_t(v >> (8 * i)));
+	};
+	put(0x06054b50, 4), put(0, 2), put(0, 2), put(count, 2), put(count, 2), put(dirSize, 4), put(dirAt, 4), put(0, 2);
+	return out;
 }
 
 std::vector<uint8_t> exportSTL(const Mesh& m) {
@@ -1169,8 +1285,12 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 	tick("emboss face features");
 
 	std::vector<Mesh> shells;
-	for (Part* p : opaque) shells.push_back(std::move(p->mesh));
-	Mesh head = mergeHead(shells, o.body != 0);
+	std::vector<int> shellSlot, headShell;  // the slot of each shell, the shell of each head face
+	for (Part* p : opaque) {
+		shells.push_back(std::move(p->mesh));
+		shellSlot.push_back(has(p->name, "Hair") || has(p->name, "Beard") ? kHair : has(p->name, "Cap") ? kShirt : kSkin);
+	}
+	Mesh head = mergeHead(shells, o.body != 0, o.mmu ? &headShell : nullptr);
 	shells.clear();
 	V3 lo, hi;
 	head.bounds(lo, hi);
@@ -1188,9 +1308,22 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 		tick("glasses");
 	}
 	pieces[0] = std::move(head);
+	const size_t headPieces = pieces.size();  // the head, then its face features and glasses
+	auto headPaint = [&]() {
+		std::vector<PaintSource> src;
+		src.push_back({&pieces[0], [&](int f) { int s = headShell[f]; return s >= 0 ? shellSlot[s] : int(kSkin); }});
+		for (size_t i = 1; i < headPieces; i++) src.push_back({&pieces[i], [](int) { return int(kFeatures); }});
+		return src;
+	};
+	// Faces filled in after tagging carry 0: the shirt.
+	auto bodySlot = [](const Mesh& m, int f) {
+		int s = m.hasUV() ? int(std::lround(m.uv[f][0].v)) : 0;
+		return s > 0 ? s : int(kShirt);
+	};
 
 	bool hasBody = false;
 	Mesh b;
+	std::function<int(int)> bodyPaint;
 	if (o.body == 'm' || o.body == 'f') {
 		if (!bodyBytes.size) throw std::runtime_error("body: no body model given");
 		Body body(bodyBytes.data, bodyBytes.size, o.height, o.build);
@@ -1213,9 +1346,15 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 
 		std::vector<Mesh> bodyParts = body.inHeadFrame();
 		std::vector<std::vector<int>> tags = body.faceTags();
+		std::vector<std::vector<char>> hands = body.handFaces();
 		for (size_t i = 0; i < bodyParts.size(); i++) {
 			for (V3& p : bodyParts[i].v) p = toZUp(p);
 			setFaceTags(bodyParts[i], tags[i]);  // which piece each face goes to, if split
+			for (size_t f = 0; f < tags[i].size() && f < bodyParts[i].uv.size(); f++) {
+				// Its filament slot rides in v (u is the split tag).
+				int slot = tags[i][f] == kTagLegs ? kPants : tags[i][f] == kTagNeck || hands[i][f] ? kSkin : kShirt;
+				for (V2& c : bodyParts[i].uv[f]) c.v = float(slot);
+			}
 			b.append(bodyParts[i]);
 		}
 		// The torso and legs share a ring of vertices at the waist (or the
@@ -1232,9 +1371,24 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 		hasBody = true;
 		tick("body");
 		if (o.make == Make::Bobblehead) {
-			Mesh all = bobblehead(pieces, b, unit, o, log, tick);
+			double dropped = 0;
+			Mesh all = bobblehead(pieces, b, unit, o, log, tick, dropped);
 			std::vector<uint8_t> stl = exportSTL(all);
 			tick("export");
+			if (o.mmu) {
+				// bobblehead() left the head raised where it prints and the body without its neck.
+				std::vector<PaintSource> src = headPaint();
+				src.push_back({&b, [&](int f) { return bodySlot(b, f); }});
+				Mesh base;
+				if (o.base) {
+					base = makeBase({b}, unit);
+					src.push_back({&base, [](int) { return int(kBase); }});
+				}
+				Mesh placed = all;  // where it was made, before it was set down on the bed
+				for (V3& p : placed.v) p.z += dropped;
+				*o.mmu = export3MF(all, paintFaces(placed, src));
+				tick("paint");
+			}
 			return stl;
 		}
 		if (o.split) {
@@ -1243,8 +1397,11 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 			tick("export");
 			return stl;
 		}
+		std::vector<int> bodySlots(b.f.size());
+		for (size_t f = 0; f < b.f.size(); f++) bodySlots[f] = bodySlot(b, int(f));
 		b.uv.clear();
 		pieces.push_back(std::move(b));
+		bodyPaint = [&, bodySlots](int f) { return bodySlots[f]; };
 	}
 
 	if (hasBody && o.base) pieces.push_back(makeBase(pieces, unit));
@@ -1279,7 +1436,6 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 	for (const Mesh& m : pieces) refs.push_back(&m);
 	const double voxel = unit / o.voxelsPerHead;
 	Mesh solid = fuse(refs, voxel, log, extras);
-	pieces.clear();
 	std::snprintf(buf, sizeof buf, "Fused: %zu triangles", solid.f.size());
 	log(buf);
 	tick("fuse");
@@ -1306,6 +1462,15 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 
 	std::vector<uint8_t> stl = exportSTL(solid);
 	tick("export");
+	if (o.mmu) {
+		// After the head (and its features), the body, then the base or keychain loop.
+		std::vector<PaintSource> src = headPaint();
+		size_t next = headPieces;
+		if (hasBody) src.push_back({&pieces[next++], bodyPaint});
+		for (; next < pieces.size(); next++) src.push_back({&pieces[next], [](int) { return int(kBase); }});
+		*o.mmu = export3MF(solid, paintFaces(solid, src));
+		tick("paint");
+	}
 	return stl;
 }
 

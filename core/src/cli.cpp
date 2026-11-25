@@ -2,7 +2,7 @@
 // browser.
 //
 //   printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb miiBodyM.glb]
-//                    [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM]
+//                    [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM] [--mmu OUT.3mf]
 //                    [--make figure|bobblehead|coin|keychain|stamp|square-stamp|articulated]
 //                    [--size MM] [--square] [--face-shape] [--keychain] [--no-rim] [--engraved] [--border none|line|dashed]
 //                    [--text TEXT --font font.otf] [--text-below]
@@ -35,7 +35,8 @@ static std::vector<uint8_t> readFile(const std::string& path) {
 
 int main(int argc, char** argv) {
 	std::vector<std::string> pos;
-	std::string mask, bodyGlb, fontPath;
+	std::string mask, bodyGlb, fontPath, mmuPath;
+	std::vector<uint8_t> mmu;
 	pmo::Options o;
 	for (int i = 1; i < argc; i++) {
 		std::string a = argv[i];
@@ -62,6 +63,8 @@ int main(int argc, char** argv) {
 			o.split = true;
 		else if (a == "--assembled")
 			o.split = o.assembled = true;
+		else if (a == "--mmu")
+			mmuPath = next();
 		else if (a == "--fit")
 			o.fit = std::atof(next().c_str());
 		else if (a == "--make") {
@@ -115,7 +118,7 @@ int main(int argc, char** argv) {
 	if (pos.size() != 2) {
 		std::fprintf(stderr,
 		             "usage: printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb body.glb]\n"
-		             "       [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM]\n"
+		             "       [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM] [--mmu OUT.3mf]\n"
 		             "       [--make figure|bobblehead|coin|keychain|stamp|square-stamp|articulated]\n"
 		             "       [--size MM] [--square] [--face-shape] [--keychain] [--no-rim] [--engraved] [--border none|line|dashed]\n"
 		             "       [--text TEXT --font font.otf] [--text-below]\n"
@@ -130,12 +133,17 @@ int main(int argc, char** argv) {
 	if (!fontPath.empty()) fontData = readFile(fontPath);
 	o.font = {fontData.data(), fontData.size()};
 	o.log = [](const std::string& s) { std::cout << s << std::endl; };
+	if (!mmuPath.empty()) o.mmu = &mmu;
 	try {
 		auto stl = pmo::generate({head.data(), head.size()}, {maskData.data(), maskData.size()},
 		                         {bodyData.data(), bodyData.size()}, o);
 		std::ofstream out(pos[1], std::ios::binary);
 		out.write(reinterpret_cast<const char*>(stl.data()), std::streamsize(stl.size()));
 		std::cout << "Done: " << pos[1] << " (" << stl.size() << " bytes)" << std::endl;
+		if (!mmu.empty()) {
+			std::ofstream(mmuPath, std::ios::binary).write(reinterpret_cast<const char*>(mmu.data()), std::streamsize(mmu.size()));
+			std::cout << "Multi-material: " << mmuPath << " (" << mmu.size() << " bytes)" << std::endl;
+		}
 	} catch (const std::exception& e) {
 		std::fprintf(stderr, "Error: %s\n", e.what());
 		return 1;

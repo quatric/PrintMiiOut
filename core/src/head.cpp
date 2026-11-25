@@ -203,17 +203,28 @@ void thickenHair(Mesh& hair) {
 	smooth(hair, 0.5, 5);
 }
 
-Mesh mergeHead(std::vector<Mesh>& opaque, bool closeNeck) {
+Mesh mergeHead(std::vector<Mesh>& opaque, bool closeNeck, std::vector<int>* shellOf) {
 	Mesh head;
 	if (opaque.empty()) return head;
-	if (opaque.size() == 1 && !closeNeck) return opaque[0];
-	for (Mesh& m : opaque) {
-		m.uv.clear();
+	if (opaque.size() == 1 && !closeNeck) {
+		if (shellOf) shellOf->assign(opaque[0].f.size(), 0);
+		return opaque[0];
+	}
+	// Each face carries its shell (plus one) in its UVs through the weld; filled holes get 0.
+	for (size_t s = 0; s < opaque.size(); s++) {
+		Mesh& m = opaque[s];
+		m.uv.assign(m.f.size(), {});
+		for (auto& c : m.uv) c[0].u = float(s + 1);
 		head.append(m);
 	}
 	// Weld vertices touching across part boundaries, then fill true holes.
 	if (opaque.size() > 1) weld(head, 0.05);
 	fillHoles(head);
+	if (shellOf) {
+		shellOf->resize(head.f.size());
+		for (size_t f = 0; f < head.f.size(); f++) (*shellOf)[f] = int(std::lround(head.uv[f][0].u)) - 1;
+	}
+	head.uv.clear();
 	return head;
 }
 
