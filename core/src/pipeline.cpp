@@ -891,10 +891,17 @@ Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Opt
 	for (const Mesh& m : bodyParts) {
 		bodyInputs.push_back(&m);
 	}
-	Mesh rest = fuse(bodyInputs, voxel, log);
-	smooth(rest, 0.5, 2);
-	dropSpecks(rest, kMinIsland);
-	simplify(rest, o.maxTriangles / 2, voxel * 0.25);
+	// The collar cut level at the foot of the neck, all round the post: the
+	// hole the neck leaves is capped unevenly, peaking at the front.
+	FuseExtras bodyExtras;
+	Cut collar;
+	const double zCollar = neckBase, reachOut = 1.6 * neckRadius;
+	collar.distance = [=](const V3& p) { return std::max(zCollar - p.z, rp - std::hypot(p.x - ax, p.y - ay)); };
+	collar.lo = V3(cx - reachOut, cy - reachOut, zCollar - voxel);
+	collar.hi = V3(cx + reachOut, cy + reachOut, headBottom);
+	bodyExtras.cuts.push_back(collar);
+	Mesh rest = fuse(bodyInputs, voxel, log, bodyExtras);
+	finishWithCuts(rest, bodyExtras.cuts, voxel, o.maxTriangles / 2);
 	std::snprintf(buf, sizeof buf, "Body: %zu triangles", rest.f.size());
 	log(buf);
 	tick("fuse body");
