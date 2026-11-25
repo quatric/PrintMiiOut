@@ -85,6 +85,9 @@ HAND = {
     "3383": ("sheet", 215.9, 279.4, 0, 1, 1, 0, 0, 215.9, 279.4),
     "53214": ("sheet", 215.9, 279.4, 0, 1, 1, 0, 0, 215.9, 279.4),
     "3270": ("sheet", 215.9, 279.4, 0, 1, 1, 0, 0, 215.9, 279.4),
+    # 2" by 3-1/3" ovals, 2 by 4: shortcut: margins assumed even (0.75" round,
+    # 1/3" and 1/2" gaps), not measured; check against a printed sheet.
+    "22820": ("oval", 84.667, 50.8, 0, 2, 4, 19.05, 19.05, 93.133, 63.5),
 }
 
 
@@ -235,6 +238,12 @@ def extras(paper, lo, gl, groups):
     """Every other Avery sheet either database has, past Print Shop's list:
     gLabels first, which keeps the shape, then LibreOffice."""
     have = {p for e in groups.values() for p in e["parts"]}
+    if paper == "letter":  # HAND's sheets Print Shop does not list
+        for part, (sh, w, h, r, nx, ny, x, y, dx, dy) in HAND.items():
+            if part not in have:
+                g = sheet(dict(shape=sh, w=w, h=h, r=r, cols=nx, rows=ny, x=x, y=y, dx=dx, dy=dy), paper)
+                groups.setdefault(key(g), dict(parts=[], desc="Oval Label", kind="O", **g))["parts"].append(part)
+                have.add(part)
     for db in (gl, lo):
         for part, cands in db[paper].items():
             desc = gl["desc"].get(part) or lo["desc"].get(part) or "Label"
