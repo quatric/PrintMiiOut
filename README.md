@@ -34,7 +34,7 @@ To check the body alone: `python miibody.py miiBodyF_wiiu_plain.glb body.stl --h
 
 ## Building in the browser
 
-`core/` is the pipeline, in C++: assimp imports the head and body GLBs and exports the STL, stb_truetype reads the lettering font, and the rest (smoothing, the face emboss, glasses, the body, fusing into one solid, simplifying, the snap-together parts, the bobblehead, and the flat face, coins and stamps) is our own code. It builds a command line tool for checking models without a browser and the WebAssembly module that the site runs in a Web Worker to build every model. The built module is checked in under `static/client/`, so the site needs no build step; see [core/README.md](core/README.md) to rebuild it.
+`core/` is the pipeline, in C++: assimp imports the head and body GLBs, stb_truetype reads the lettering font, and the rest (smoothing, the face emboss, glasses, the body, fusing into one solid, simplifying, the snap-together parts, the bobblehead, and the flat face, coins and stamps) is our own code. It builds a command line tool for checking models without a browser and the WebAssembly module that the site runs in a Web Worker to build every model. The built module is checked in under `static/client/`, so the site needs no build step; see [core/README.md](core/README.md) to rebuild it.
 
 The bodies the browser uses (`static/client/miiBody{M,F}.glb`) are the game's bodies re-saved without mesh quantization, which assimp cannot read, and with the standing pose baked in:
 

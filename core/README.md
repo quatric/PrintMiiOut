@@ -2,7 +2,7 @@
 
 The model pipeline in C++: a Mii head GLB and its face mask in, a printable STL out. It runs both as a command line tool and as WebAssembly in the browser, where the site builds every model.
 
-- **assimp** (only its glTF importer and STL exporter) reads the GLBs and writes the STL; the zlib it builds deflates the multi-material 3MF.
+- **assimp** (only its glTF importer) reads the GLBs; the zlib it builds deflates the multi-material 3MF. The STL is written directly.
 - **stb_image** (vendored in `third_party/`) decodes the textures, and **stb_truetype** reads the lettering font.
 - Everything else is here: Loop subdivision and smoothing like Blender's modifiers, the face emboss from the mask texture, the glasses frame, the body posed and scaled like FFL.js (`body.cpp`, the same rules as `miibody.py`), and the fuse.
 

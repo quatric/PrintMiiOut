@@ -5,13 +5,13 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <functional>
 #include <map>
 #include <memory>
 #include <stdexcept>
 #include <zlib.h>
 
-#include <assimp/Exporter.hpp>
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 
@@ -1160,39 +1160,24 @@ std::vector<uint8_t> export3MF(const Mesh& m, const std::vector<int>& slots) {
 	return out;
 }
 
+/** A binary STL, written straight out: assimp's exporter copies the mesh
+ *  twice over, which is more memory than some browsers will give. */
 std::vector<uint8_t> exportSTL(const Mesh& m) {
-	aiScene scene;
-	scene.mRootNode = new aiNode();
-	scene.mRootNode->mNumMeshes = 1;
-	scene.mRootNode->mMeshes = new unsigned[1]{0};
-	scene.mNumMaterials = 1;
-	scene.mMaterials = new aiMaterial*[1]{new aiMaterial()};
-	scene.mNumMeshes = 1;
-	scene.mMeshes = new aiMesh*[1];
-	aiMesh* mesh = new aiMesh();
-	scene.mMeshes[0] = mesh;
-	mesh->mPrimitiveTypes = aiPrimitiveType_TRIANGLE;
-	mesh->mMaterialIndex = 0;
-	mesh->mNumVertices = (unsigned)m.v.size();
-	mesh->mVertices = new aiVector3D[m.v.size()];
-	mesh->mNormals = new aiVector3D[m.v.size()];
-	auto n = vertexNormals(m);
-	for (size_t i = 0; i < m.v.size(); i++) {
-		mesh->mVertices[i] = aiVector3D(float(m.v[i].x), float(m.v[i].y), float(m.v[i].z));
-		mesh->mNormals[i] = aiVector3D(float(n[i].x), float(n[i].y), float(n[i].z));
+	std::vector<uint8_t> out(84 + 50 * m.f.size(), 0);
+	uint32_t n = uint32_t(m.f.size());
+	std::memcpy(&out[80], &n, 4);
+	uint8_t* w = &out[84];
+	for (const Tri& t : m.f) {
+		const V3 &a = m.v[t[0]], &b = m.v[t[1]], &c = m.v[t[2]];
+		V3 nn = cross(b - a, c - a);
+		double len = length(nn);
+		if (len > 0) nn = nn * (1.0 / len);
+		float f[12] = {float(nn.x), float(nn.y), float(nn.z), float(a.x), float(a.y), float(a.z),
+		               float(b.x),  float(b.y),  float(b.z),  float(c.x), float(c.y), float(c.z)};
+		std::memcpy(w, f, 48);  // little endian, as STL is, on every target
+		w += 50;
 	}
-	mesh->mNumFaces = (unsigned)m.f.size();
-	mesh->mFaces = new aiFace[m.f.size()];
-	for (size_t i = 0; i < m.f.size(); i++) {
-		aiFace& face = mesh->mFaces[i];
-		face.mNumIndices = 3;
-		face.mIndices = new unsigned[3]{unsigned(m.f[i][0]), unsigned(m.f[i][1]), unsigned(m.f[i][2])};
-	}
-	Assimp::Exporter exporter;
-	const aiExportDataBlob* blob = exporter.ExportToBlob(&scene, "stlb");
-	if (!blob) throw std::runtime_error(std::string("export: ") + exporter.GetErrorString());
-	const uint8_t* data = static_cast<const uint8_t*>(blob->data);
-	return std::vector<uint8_t>(data, data + blob->size);
+	return out;
 }
 
 }  // namespace
@@ -1491,6 +1476,7 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 	for (const Mesh& m : pieces) refs.push_back(&m);
 	const double voxel = unit / o.voxelsPerHead;
 	Mesh solid = fuse(refs, voxel, log, extras);
+	if (!o.mmu) pieces.clear();  // painting needs them; otherwise free them for what follows
 	std::snprintf(buf, sizeof buf, "Fused: %zu triangles", solid.f.size());
 	log(buf);
 	tick("fuse");
@@ -1515,8 +1501,6 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 	log(buf);
 	tick("tidy");
 
-	std::vector<uint8_t> stl = exportSTL(solid);
-	tick("export");
 	if (o.mmu) {
 		// After the head (and its features), the body, then the base or keychain loop.
 		std::vector<PaintSource> src = headPaint();
@@ -1525,8 +1509,11 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 		for (; next < pieces.size(); next++) src.push_back({&pieces[next], [](int) { return int(kBase); }});
 		sheet.reach = 1.5 * voxel;
 		*o.mmu = export3MF(solid, paintFaces(solid, src, &sheet));
+		pieces.clear();
 		tick("paint");
 	}
+	std::vector<uint8_t> stl = exportSTL(solid);
+	tick("export");
 	return stl;
 }
 
