@@ -32,7 +32,8 @@ namespace pmo {
 namespace {
 
 // Sizes are fractions of head width, so they hold at any import scale.
-const double kVoxelSize = 1.0 / 240;  // glasses grid, whatever the fuse resolution
+const double kVoxelSize = 1.0 / 240;
+const double kHairCrease = 50;  // degrees: hair folded sharper than this is styled sharp, and kept so  // glasses grid, whatever the fuse resolution
 const double kBaseRadius = 0.45;
 const double kBaseHeight = 0.05;
 const double kBaseSink = 0.025;
@@ -786,7 +787,7 @@ Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Opt
 		dx *= most / off;
 		dy *= most / off;
 	}
-	const double ax = cx + dx, ay = cy + dy;
+	double ax = cx + dx, ay = cy + dy;
 	const double Rr = rb + c, apexAbove = Rr / std::sin(alpha), wall = 1.6;
 	// The post and its knob: a cone under the knob (no flatter than alpha)
 	// and a dome on it, which the head rests on; and round them the hollow,
@@ -797,7 +798,8 @@ Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Opt
 	};
 	auto pivotAt = [&](double pz) { Pivot v{pz, 0, pz - 0.5 * rb}; v.zk0 = v.zk1 - (rb - rp) / std::tan(alpha); return v; };
 	const double zPost = neckBase - 3.0;
-	auto knobAt = [=](const Pivot& v) {
+	// By reference, so each pivot tried takes ax and ay as they are then.
+	auto knobAt = [&](const Pivot& v) {
 		return [=](const V3& p) {
 			double rho = std::hypot(p.x - ax, p.y - ay), z = p.z;
 			double stem = std::max(rho - rp, std::max(zPost - z, z - v.pz));
@@ -807,7 +809,7 @@ Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Opt
 			return std::min(std::min(stem, cone), std::min(cyl, dome));
 		};
 	};
-	auto hollowAt = [=](const Pivot& v) {
+	auto hollowAt = [&](const Pivot& v) {
 		auto knob = knobAt(v);
 		const double zApex = v.pz + apexAbove;
 		return [=](const V3& p) {
@@ -830,9 +832,24 @@ Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Opt
 				}
 		return true;
 	};
-	Pivot pivot = pivotAt(com.z + 0.12 * unit);
-	while (!fits(pivot) && pivot.pz > com.z + 0.01 * unit) pivot = pivotAt(pivot.pz - 0.005 * unit);
-	if (!fits(pivot)) throw std::runtime_error("bobblehead: no room in the head for the pivot");
+	// From a little above the centre of mass down to just above it; failing
+	// that, higher up the head (it still hangs upright), then the same again
+	// moved over towards the centre of mass.
+	auto search = [&](Pivot& found) {
+		for (double h = 0.12; h > 0.009; h -= 0.005)
+			if (fits(found = pivotAt(com.z + h * unit))) return true;
+		for (double h = 0.125; h < 0.4; h += 0.005)
+			if (fits(found = pivotAt(com.z + h * unit))) return true;
+		return false;
+	};
+	Pivot pivot;
+	bool placed = search(pivot);
+	for (int k = 1; !placed && k <= 4; k++) {
+		ax = cx + dx + (com.x - cx - dx) * k / 4;
+		ay = cy + dy + (com.y - cy - dy) * k / 4;
+		placed = search(pivot);
+	}
+	if (!placed) throw std::runtime_error("bobblehead: no room in the head for the pivot");
 	const double pz = pivot.pz, zk0 = pivot.zk0, zk1 = pivot.zk1, zApex = pz + apexAbove;
 	std::snprintf(buf, sizeof buf,
 	              "Bobblehead: head lifted %.2f, pivot %.2f above its centre of mass, post %.2f thick, knob %.2f, "
@@ -914,7 +931,8 @@ void prepareFlat(std::vector<Part>& parts, Bytes maskBytes, FlatParts& out,
 			out.patterns.push_back(p.mesh);
 			f.pattern = &out.patterns.back();
 		}
-		if (!overlay) subdivide(p.mesh, 2);  // smooth outlines
+		bool hair = has(p.name, "Hair") || has(p.name, "Beard");
+		if (!overlay) subdivide(p.mesh, 2, 2, hair ? kHairCrease : 0);  // smooth outlines, the hair's sharp tips kept
 		f.name = p.name;
 		f.mesh = &p.mesh;
 		f.texture = has(p.name, "Mask") && !out.external.empty() ? &out.external : &p.texture;
@@ -1273,7 +1291,7 @@ std::vector<uint8_t> generate(Bytes headBytes, Bytes maskBytes, Bytes bodyBytes,
 	for (Part* p : masks) weld(p->mesh, 0.0001);
 	for (Part* p : opaque) {
 		bool hair = has(p->name, "Hair") || has(p->name, "Beard");
-		subdivide(p->mesh, 3, hair ? std::clamp(o.hairSmoothing, 0, 3) : 3);
+		subdivide(p->mesh, 3, hair ? std::clamp(o.hairSmoothing, 0, 3) : 3, hair ? kHairCrease : 0);
 	}
 	for (Part* p : opaque) {
 		if (p->name == "OpaCap") embossCap(p->mesh, p->texture);

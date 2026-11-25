@@ -214,11 +214,16 @@ int fillHoles(Mesh& m) {
 	return filled;
 }
 
-static void subdivideOnce(Mesh& m, bool smooth) {
+static void subdivideOnce(Mesh& m, bool smooth, double creaseCos) {
 	const int V = (int)m.v.size();
 	auto he = sortedHalfEdges(m);
 	struct Edge {
 		int a, b, faces, opp0, opp1;
+		bool hard;  // open, or a crease kept sharp
+	};
+	auto normal = [&](int f) {
+		const Tri& t = m.f[f];
+		return normalized(cross(m.v[t[1]] - m.v[t[0]], m.v[t[2]] - m.v[t[0]]));
 	};
 	std::vector<Edge> edges;
 	edges.reserve(he.size() / 2 + 1);
@@ -227,7 +232,8 @@ static void subdivideOnce(Mesh& m, bool smooth) {
 	for (size_t i = 0; i < he.size();) {
 		size_t j = i;
 		while (j < he.size() && he[j].key == he[i].key) j++;
-		Edge e{he[i].from, he[i].to, int(j - i), he[i].opposite, j - i > 1 ? he[i + 1].opposite : -1};
+		Edge e{he[i].from, he[i].to, int(j - i), he[i].opposite, j - i > 1 ? he[i + 1].opposite : -1, j - i == 1};
+		if (j - i == 2 && creaseCos < 1) e.hard = dot(normal(he[i].face), normal(he[i + 1].face)) < creaseCos;
 		int id = (int)edges.size();
 		edges.push_back(e);
 		for (size_t k = i; k < j; k++) {
@@ -246,7 +252,7 @@ static void subdivideOnce(Mesh& m, bool smooth) {
 		sum[e.b] += m.v[e.a];
 		count[e.a]++;
 		count[e.b]++;
-		if (e.faces == 1) {
+		if (e.hard) {
 			bsum[e.a] += m.v[e.b];
 			bsum[e.b] += m.v[e.a];
 			bcount[e.a]++;
@@ -276,7 +282,7 @@ static void subdivideOnce(Mesh& m, bool smooth) {
 	for (size_t e = 0; e < edges.size(); e++) {
 		const Edge& ed = edges[e];
 		V3 a = m.v[ed.a], b = m.v[ed.b];
-		if (smooth && ed.faces == 2)
+		if (smooth && ed.faces == 2 && !ed.hard)
 			nv[V + e] = (a + b) * 0.375 + (m.v[ed.opp0] + m.v[ed.opp1]) * 0.125;
 		else
 			nv[V + e] = (a + b) * 0.5;
@@ -309,8 +315,9 @@ static void subdivideOnce(Mesh& m, bool smooth) {
 	m.uv.swap(nuv);
 }
 
-void subdivide(Mesh& m, int levels, int smoothLevels) {
-	for (int i = 0; i < levels; i++) subdivideOnce(m, i < smoothLevels);
+void subdivide(Mesh& m, int levels, int smoothLevels, double creaseDegrees) {
+	const double creaseCos = creaseDegrees > 0 ? std::cos(creaseDegrees * M_PI / 180) : 2;
+	for (int i = 0; i < levels; i++) subdivideOnce(m, i < smoothLevels, creaseCos);
 }
 
 std::vector<V3> vertexNormals(const Mesh& m) {

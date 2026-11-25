@@ -31,8 +31,9 @@ int fillHoles(Mesh& m);
 
 /** Loop subdivision, smoothing like Blender's Subdivision Surface modifier,
  *  with open edges kept as curves and corners pinned. Carries UVs. */
-/** Loop subdivision; past smoothLevels, faces are only split, the shape kept. */
-void subdivide(Mesh& m, int levels, int smoothLevels = 1 << 30);
+/** Loop subdivision; past smoothLevels, faces are only split, the shape kept.
+ *  Edges folded sharper than creaseDegrees (0: none) stay sharp, like open edges. */
+void subdivide(Mesh& m, int levels, int smoothLevels = 1 << 30, double creaseDegrees = 0);
 
 /** Area weighted vertex normals. */
 std::vector<V3> vertexNormals(const Mesh& m);
