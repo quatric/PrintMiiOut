@@ -192,7 +192,7 @@ Mesh makeFlexi(const FlexiInput& in, const FlexiOptions& o, const LogFn& log,
 	// into a groove in its ring, so it cannot fall out of the plate.
 	const double clr = std::clamp(0.35 + o.fit, 0.15, 0.8);
 	const double T = std::clamp(0.032 * H, 3.0, 5.0), bulge = 0.22 * T, inkH = 0.6;
-	const double r0 = std::clamp(0.032 * H, 2.6, 5.5);
+	const double rBase = std::clamp(0.032 * H, 2.6, 5.5), rMin = 1.8;
 	auto sizeJoint = [&](Joint& j, double r) {
 		j.r = r;
 		j.w = std::min(std::max(2.0, 0.55 * r), 1.2 * r);
@@ -239,132 +239,158 @@ Mesh makeFlexi(const FlexiInput& in, const FlexiOptions& o, const LogFn& log,
 	};
 
 	std::vector<Joint> joints;
-	{
-		Joint a;
-		a.name = "left arm";
-		a.labels = {kArmL};
-		sizeJoint(a, r0);
-		if (place(a, toMm(in.shoulderL.x, in.shoulderL.z))) joints.push_back(a);
-		a.name = "right arm";
-		a.labels = {kArmR};
-		if (place(a, toMm(in.shoulderR.x, in.shoulderR.z))) joints.push_back(a);
-	}
-	{
-		// The hips sit close together: shrink both knobs to fit side by side,
-		// or, if that leaves them too small, move both legs on one joint.
-		Joint l, r;
-		l.name = "left leg";
-		l.labels = {kLegL};
-		r.name = "right leg";
-		r.labels = {kLegR};
-		sizeJoint(l, r0);
-		sizeJoint(r, r0);
-		bool hasL = place(l, hipL), hasR = place(r, hipR);
-		double rFit = 0;
-		if (hasL && hasR) {
-			const double sep = norm(l.at - r.at);
-			rFit = std::min(r0, (sep - 0.8) / 2 - clr - bulge);
+	Mask torso;
+	// A small torso may have no room for the usual knobs: shrink them until
+	// every ring stays on it.
+	for (double r0 = rBase;; r0 *= 0.85) {
+		joints.clear();
+		{
+			Joint a;
+			a.name = "left arm";
+			a.labels = {kArmL};
+			sizeJoint(a, r0);
+			if (place(a, toMm(in.shoulderL.x, in.shoulderL.z))) joints.push_back(a);
+			a.name = "right arm";
+			a.labels = {kArmR};
+			if (place(a, toMm(in.shoulderR.x, in.shoulderR.z))) joints.push_back(a);
 		}
-		if (hasL && hasR && rFit >= 2.2) {
-			sizeJoint(l, rFit);
-			sizeJoint(r, rFit);
-			place(l, hipL);
-			place(r, hipR);
-			joints.push_back(l);
-			joints.push_back(r);
-		} else if (hasL || hasR) {
-			Joint both;
-			both.name = "legs";
-			both.labels = {kLegL, kLegR};
-			sizeJoint(both, r0);
-			if (place(both, (hipL + hipR) * 0.5)) joints.push_back(both);
+		{
+			// The hips sit close together: shrink both knobs to fit side by side,
+			// or, if that leaves them too small, move both legs on one joint.
+			Joint l, r;
+			l.name = "left leg";
+			l.labels = {kLegL};
+			r.name = "right leg";
+			r.labels = {kLegR};
+			sizeJoint(l, r0);
+			sizeJoint(r, r0);
+			bool hasL = place(l, hipL), hasR = place(r, hipR);
+			double rFit = 0;
+			if (hasL && hasR) {
+				const double sep = norm(l.at - r.at);
+				rFit = std::min(r0, (sep - 0.8) / 2 - clr - bulge);
+			}
+			if (hasL && hasR && rFit >= 2.2) {
+				sizeJoint(l, rFit);
+				sizeJoint(r, rFit);
+				place(l, hipL);
+				place(r, hipR);
+				joints.push_back(l);
+				joints.push_back(r);
+			} else if (hasL || hasR) {
+				Joint both;
+				both.name = "legs";
+				both.labels = {kLegL, kLegR};
+				sizeJoint(both, r0);
+				if (place(both, (hipL + hipR) * 0.5)) joints.push_back(both);
+			}
 		}
-	}
-	if (joints.empty()) throw std::runtime_error("articulated: no arms or legs to joint");
+		if (joints.empty()) throw std::runtime_error("articulated: no arms or legs to joint");
 
-	// Each limb: the knob, its neck, and the limb from beyond the ring on.
-	Mask taken;  // every limb so far, grown by the clearance
-	taken.reset(lab.x0, lab.y0, px, lab.w, lab.h, 0);
-	for (Joint& j : joints) {
-		Mask keep;
-		keep.reset(lab.x0, lab.y0, px, lab.w, lab.h, 0);
-		const double away = j.rOut + clr;
-		for (int y = 0; y < lab.h; y++)
-			for (int x = 0; x < lab.w; x++) {
-				const uint8_t l = lab.at(x, y);
-				if (std::find(j.labels.begin(), j.labels.end(), l) == j.labels.end()) continue;
-				if (norm(P2(lab.cx(x), lab.cy(y)) - j.at) > away) keep.at(x, y) = 1;
-			}
-		j.L = away + 1.0;
-		for (double t = away; t < away + 30; t += px)
-			if (on(keep, j.at + j.dir * t)) {
-				j.L = t + 1.0;
-				break;
-			}
-		j.piece = keep;
-		for (int y = 0; y < lab.h; y++)
-			for (int x = 0; x < lab.w; x++) {
-				const P2 q = P2(lab.cx(x), lab.cy(y)) - j.at;
-				const double along = q.x * j.dir.x + q.y * j.dir.y;
-				const double across = std::fabs(q.x * j.dir.y - q.y * j.dir.x);
-				if (norm(q) <= j.r || (along >= 0 && along <= j.L && across <= j.w / 2)) j.piece.at(x, y) = 1;
-				if (taken.at(x, y)) j.piece.at(x, y) = 0;
-			}
-		int si, sj;
-		j.piece.cell(j.at.x, j.at.y, si, sj);
-		keepComponent(j.piece, si, sj);
-		Mask grown = j.piece;
-		offset(grown, clr);
-		unite(taken, grown);
-		std::snprintf(buf, sizeof buf, "Joint (%s): knob %.1f mm across, neck %.1f wide, swings %.0f deg each way",
-		              j.name, 2 * j.r, j.w, j.theta * 180 / kPi);
-		log(buf);
-	}
-
-	// The torso: the rings added, the knobs' holes and the room each limb
-	// needs to swing cut out, clear of every limb.
-	Mask torso = torsoMask;
-	for (int y = 0; y < lab.h; y++)
-		for (int x = 0; x < lab.w; x++) {
-			const P2 p(lab.cx(x), lab.cy(y));
-			for (const Joint& j : joints) {
-				const double rho = norm(p - j.at);
-				if (rho <= j.rOut) torso.at(x, y) = 1;
-			}
-			for (const Joint& j : joints)
-				if (norm(p - j.at) <= j.r + clr) torso.at(x, y) = 0;
-		}
-	for (const Joint& j : joints) {
-		// The top of the limb, turned theta either way about the knob.
-		const double reach = j.L + 3, zone = reach + clr + 2 * px;
-		const int steps = std::max(4, int(std::ceil(j.theta / (2.0 * kPi / 180))));
-		Mask sweep;
-		sweep.reset(lab.x0, lab.y0, px, lab.w, lab.h, 0);
-		int i0, j0, i1, j1;
-		lab.cell(j.at.x - zone, j.at.y - zone, i0, j0);
-		lab.cell(j.at.x + zone, j.at.y + zone, i1, j1);
-		i0 = std::max(i0, 0), j0 = std::max(j0, 0), i1 = std::min(i1, lab.w - 1), j1 = std::min(j1, lab.h - 1);
-		for (int y = j0; y <= j1; y++)
-			for (int x = i0; x <= i1; x++) {
-				const P2 q = P2(lab.cx(x), lab.cy(y)) - j.at;
-				if (norm(q) > reach) continue;
-				for (int k = -steps; k <= steps && !sweep.at(x, y); k++) {
-					const double a = -j.theta * k / steps, c = std::cos(a), sn = std::sin(a);
-					const P2 back = j.at + P2(c * q.x - sn * q.y, sn * q.x + c * q.y);
-					if (on(j.piece, back)) sweep.at(x, y) = 1;
+		// Each limb: the knob, its neck, and the limb from beyond the ring on.
+		Mask taken;  // every limb so far, grown by the clearance
+		taken.reset(lab.x0, lab.y0, px, lab.w, lab.h, 0);
+		for (Joint& j : joints) {
+			Mask keep;
+			keep.reset(lab.x0, lab.y0, px, lab.w, lab.h, 0);
+			const double away = j.rOut + clr;
+			for (int y = 0; y < lab.h; y++)
+				for (int x = 0; x < lab.w; x++) {
+					const uint8_t l = lab.at(x, y);
+					if (std::find(j.labels.begin(), j.labels.end(), l) == j.labels.end()) continue;
+					if (norm(P2(lab.cx(x), lab.cy(y)) - j.at) > away) keep.at(x, y) = 1;
 				}
+			j.L = away + 1.0;
+			for (double t = away; t < away + 30; t += px)
+				if (on(keep, j.at + j.dir * t)) {
+					j.L = t + 1.0;
+					break;
+				}
+			j.piece = keep;
+			for (int y = 0; y < lab.h; y++)
+				for (int x = 0; x < lab.w; x++) {
+					const P2 q = P2(lab.cx(x), lab.cy(y)) - j.at;
+					const double along = q.x * j.dir.x + q.y * j.dir.y;
+					const double across = std::fabs(q.x * j.dir.y - q.y * j.dir.x);
+					if (norm(q) <= j.r || (along >= 0 && along <= j.L && across <= j.w / 2)) j.piece.at(x, y) = 1;
+					if (taken.at(x, y)) j.piece.at(x, y) = 0;
+				}
+			int si, sj;
+			j.piece.cell(j.at.x, j.at.y, si, sj);
+			keepComponent(j.piece, si, sj);
+			Mask grown = j.piece;
+			offset(grown, clr);
+			unite(taken, grown);
+			std::snprintf(buf, sizeof buf, "Joint (%s): knob %.1f mm across, neck %.1f wide, swings %.0f deg each way",
+			              j.name, 2 * j.r, j.w, j.theta * 180 / kPi);
+			log(buf);
+		}
+
+		// The torso: the rings added, the knobs' holes and the room each limb
+		// needs to swing cut out, clear of every limb.
+		torso = torsoMask;
+		for (int y = 0; y < lab.h; y++)
+			for (int x = 0; x < lab.w; x++) {
+				const P2 p(lab.cx(x), lab.cy(y));
+				for (const Joint& j : joints) {
+					const double rho = norm(p - j.at);
+					if (rho <= j.rOut) torso.at(x, y) = 1;
+				}
+				for (const Joint& j : joints)
+					if (norm(p - j.at) <= j.r + clr) torso.at(x, y) = 0;
 			}
-		offset(sweep, clr);
+		for (const Joint& j : joints) {
+			// The top of the limb, turned theta either way about the knob.
+			const double reach = j.L + 3, zone = reach + clr + 2 * px;
+			const int steps = std::max(4, int(std::ceil(j.theta / (2.0 * kPi / 180))));
+			Mask sweep;
+			sweep.reset(lab.x0, lab.y0, px, lab.w, lab.h, 0);
+			int i0, j0, i1, j1;
+			lab.cell(j.at.x - zone, j.at.y - zone, i0, j0);
+			lab.cell(j.at.x + zone, j.at.y + zone, i1, j1);
+			i0 = std::max(i0, 0), j0 = std::max(j0, 0), i1 = std::min(i1, lab.w - 1), j1 = std::min(j1, lab.h - 1);
+			for (int y = j0; y <= j1; y++)
+				for (int x = i0; x <= i1; x++) {
+					const P2 q = P2(lab.cx(x), lab.cy(y)) - j.at;
+					if (norm(q) > reach) continue;
+					for (int k = -steps; k <= steps && !sweep.at(x, y); k++) {
+						const double a = -j.theta * k / steps, c = std::cos(a), sn = std::sin(a);
+						const P2 back = j.at + P2(c * q.x - sn * q.y, sn * q.x + c * q.y);
+						if (on(j.piece, back)) sweep.at(x, y) = 1;
+					}
+				}
+			offset(sweep, clr);
+			for (size_t k = 0; k < torso.a.size(); k++)
+				if (sweep.a[k]) torso.a[k] = 0;
+		}
 		for (size_t k = 0; k < torso.a.size(); k++)
-			if (sweep.a[k]) torso.a[k] = 0;
-	}
-	for (size_t k = 0; k < torso.a.size(); k++)
-		if (taken.a[k]) torso.a[k] = 0;
-	{
-		int si, sj;
-		P2 headTop = toMm((in.face.x0 + in.face.x1) / 2, (in.face.z0 + in.face.z1) / 2);
-		torso.cell(headTop.x, headTop.y, si, sj);
-		keepComponent(torso, si, sj);
+			if (taken.a[k]) torso.a[k] = 0;
+		{
+			int si, sj;
+			P2 headTop = toMm((in.face.x0 + in.face.x1) / 2, (in.face.z0 + in.face.z1) / 2);
+			torso.cell(headTop.x, headTop.y, si, sj);
+			keepComponent(torso, si, sj);
+		}
+		// Every ring has to stay on the head's piece: with a small torso the
+		// swing cut-outs can sever it, and the limb would print loose.
+		bool held = true;
+		for (const Joint& j : joints) {
+			size_t want = 0, have = 0;
+			int i0, j0, i1, j1;
+			lab.cell(j.at.x - j.rOut, j.at.y - j.rOut, i0, j0);
+			lab.cell(j.at.x + j.rOut, j.at.y + j.rOut, i1, j1);
+			for (int y = std::max(j0, 0); y <= std::min(j1, lab.h - 1); y++)
+				for (int x = std::max(i0, 0); x <= std::min(i1, lab.w - 1); x++) {
+					const double rho = norm(P2(lab.cx(x), lab.cy(y)) - j.at);
+					if (rho < j.r + clr + px || rho > j.rOut) continue;
+					want++;
+					if (torso.at(x, y)) have++;
+				}
+			if (2 * have < want) held = false;
+		}
+		if (held) break;
+		if (r0 * 0.85 < rMin) throw std::runtime_error("articulated: the torso is too small to hold the joints; try a bigger size");
+		log("Joints too big for the torso: trying smaller knobs");
 	}
 	tick("cut joints");
 
