@@ -710,7 +710,7 @@ Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Opt
 	const double voxel = unit / o.voxelsPerHead;
 	const double loosen = std::clamp(o.fit, -0.2, 0.5);
 	const double c = std::max(0.25, 0.45 + loosen);  // room all round the knob and post
-	const double rp = std::clamp(0.06 * unit, 1.6, 2.6), rb = rp + 1.3;
+	const double rp = std::clamp(0.06 * unit, 1.6, 3.4), rb = rp + 1.3;
 	const double alpha = 40 * M_PI / 180;  // overhangs inside: no flatter than this from upright
 	const double flare = 6 * M_PI / 180;   // the hollow widens going down, so the head can rock
 
@@ -737,25 +737,37 @@ Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Opt
 	for (const V3& p : headParts[0].v)
 		if (std::hypot(p.x - cx, p.y - cy) < 1.3 * neckRadius) headBottom = std::min(headBottom, p.z);
 
-	// Lift the head clear of the shoulders, with a little neck showing.
+	// Lift the head clear of the shoulders, as little as it can be: the head
+	// sits down in the collar, so round the neck the collar is sunk to clear
+	// it instead (below), and the neck stays short like a bobblehead's.
+	const double reachOut = 1.6 * neckRadius;
+	// Room for the head to rock before it touches the body: clearOfBody out
+	// at its edge, less near the post, where rocking barely moves it.
+	const double clearOfBody = std::max(2.5, 0.04 * unit), rockTan = std::tan(8 * M_PI / 180);
+	auto roomAt = [=](double x, double y) { return std::min(clearOfBody, 1.0 + std::hypot(x - cx, y - cy) * rockTan); };
 	Mesh torso = body;
-	keepFaces(torso, [&](int f) { return faceTag(torso, f) != kTagNeck && faceTag(torso, f) != kTagCap; });
+	keepFaces(torso, [&](int f) {
+		if (faceTag(torso, f) == kTagNeck || faceTag(torso, f) == kTagCap) return false;
+		for (int k : torso.f[f])
+			if (std::hypot(torso.v[k].x - cx, torso.v[k].y - cy) >= reachOut) return true;
+		return false;  // in the collar, which is cut to fit the head
+	});
 	compact(torso);
 	BVH torsoBVH(torso);
-	// Room for the head to rock before it touches the shoulders.
-	const double clearOfBody = std::max(2.5, 0.04 * unit);
 	double lift = 0;
-	for (int it = 0; it < 6; it++) {
-		double gap = 1e300;
+	for (int it = 0; it < 8; it++) {
+		double need = 0;
 		for (const Mesh& m : headParts) {
 			size_t step = std::max<size_t>(1, m.v.size() / 20000);
-			for (size_t i = 0; i < m.v.size(); i += step) {
+			for (size_t i = 0; i < m.v.size(); i++) {
+				// Every point round the collar, where the chin comes closest.
+				if (i % step && std::hypot(m.v[i].x - cx, m.v[i].y - cy) > reachOut + 2 * clearOfBody) continue;
 				V3 p = m.v[i] + V3(0, 0, lift);
-				gap = std::min(gap, length(p - torsoBVH.closest(p)));
+				need = std::max(need, roomAt(p.x, p.y) - length(p - torsoBVH.closest(p)));
 			}
 		}
-		if (gap >= clearOfBody) break;
-		lift += clearOfBody - gap + 0.05;
+		if (need <= 0) break;
+		lift += need + 0.05;
 	}
 	for (Mesh& m : headParts)
 		for (V3& p : m.v) p.z += lift;
@@ -917,14 +929,43 @@ Mesh bobblehead(std::vector<Mesh>& headParts, Mesh& body, double unit, const Opt
 	for (const Mesh& m : bodyParts) {
 		bodyInputs.push_back(&m);
 	}
-	// The collar cut level at the foot of the neck, all round the post: the
-	// hole the neck leaves is capped unevenly, peaking at the front.
+	// The collar cut level at the foot of the neck, all round the post (the
+	// hole the neck leaves is capped unevenly, peaking at the front), and sunk
+	// into a bowl wherever the head hangs lower, with room for it to rock.
 	FuseExtras bodyExtras;
 	Cut collar;
-	const double zCollar = neckBase, reachOut = 1.6 * neckRadius;
-	collar.distance = [=](const V3& p) { return std::max(zCollar - p.z, rp - std::hypot(p.x - ax, p.y - ay)); };
-	collar.lo = V3(cx - reachOut, cy - reachOut, zCollar - voxel);
-	collar.hi = V3(cx + reachOut, cy + reachOut, headBottom);
+	const double zCollar = neckBase, cell = 0.25;
+	const int nc = int(std::ceil(2 * reachOut / cell)) + 1;
+	const double gx = cx - reachOut, gy = cy - reachOut;
+	auto bowl = std::make_shared<std::vector<double>>(size_t(nc) * nc, zCollar);
+	double zLow = zCollar;
+	for (const Mesh& m : headParts)
+		for (const V3& p : m.v) {
+			if (std::fabs(p.x - cx) > reachOut + clearOfBody || std::fabs(p.y - cy) > reachOut + clearOfBody) continue;
+			const double room = roomAt(p.x, p.y), zc = p.z - room;
+			if (zc >= zCollar) continue;
+			const int i0 = std::max(0, int((p.x - room - gx) / cell)), i1 = std::min(nc - 1, int((p.x + room - gx) / cell) + 1);
+			const int j0 = std::max(0, int((p.y - room - gy) / cell)), j1 = std::min(nc - 1, int((p.y + room - gy) / cell) + 1);
+			for (int j = j0; j <= j1; j++)
+				for (int i = i0; i <= i1; i++)
+					if (std::hypot(gx + i * cell - p.x, gy + j * cell - p.y) <= room) {
+						double& b = (*bowl)[size_t(j) * nc + i];
+						b = std::min(b, zc);
+						zLow = std::min(zLow, zc);
+					}
+		}
+	collar.distance = [=](const V3& p) {
+		const double fx = std::clamp((p.x - gx) / cell, 0.0, nc - 1.001), fy = std::clamp((p.y - gy) / cell, 0.0, nc - 1.001);
+		const int i = int(fx), j = int(fy);
+		const double u = fx - i, v = fy - j;
+		const double* b = bowl->data() + size_t(j) * nc + i;
+		const double zCut = (b[0] * (1 - u) + b[1] * u) * (1 - v) + (b[nc] * (1 - u) + b[nc + 1] * u) * v;
+		const double rho = std::hypot(p.x - cx, p.y - cy);
+		return std::max(std::max(zCut - p.z, rho - reachOut), rp - std::hypot(p.x - ax, p.y - ay));
+	};
+	collar.lo = V3(cx - reachOut, cy - reachOut, zLow - voxel);
+	// Up to the knob: a collar that rises at the front reaches into the head.
+	collar.hi = V3(cx + reachOut, cy + reachOut, zk0);
 	bodyExtras.cuts.push_back(collar);
 	Mesh rest = fuse(bodyInputs, voxel, log, bodyExtras);
 	finishWithCuts(rest, bodyExtras.cuts, voxel, o.maxTriangles / 2);
