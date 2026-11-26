@@ -107,6 +107,48 @@ FaceArt drawFace(const std::vector<FacePart>& parts, double px, double line, dou
 		}
 	}
 
+	// A sliver of hair or beard thinner than a line poking into the face (a
+	// sharp strand edge at the temple) would fill and outline into a blob:
+	// give it back to the face. Any that touch the paper (spiky tips, a
+	// sideburn's corner) stay sharp.
+	for (const uint8_t filled : {uint8_t(kHair), uint8_t(kBeard)}) {
+		Mask part;
+		part.reset(group.x0, group.y0, px, W, H, 0);
+		for (size_t k = 0; k < part.a.size(); k++) part.a[k] = group.a[k] == filled;
+		Mask open = part;
+		offset(open, -0.5 * line);
+		offset(open, 0.5 * line);
+		std::vector<char> seen(part.a.size(), 0);
+		std::vector<int> stack, members;
+		for (size_t s = 0; s < part.a.size(); s++) {
+			if (seen[s] || !part.a[s] || open.a[s]) continue;
+			int around[5] = {0, 0, 0, 0, 0};
+			members.clear();
+			stack.push_back(int(s));
+			seen[s] = 1;
+			while (!stack.empty()) {
+				const int q = stack.back();
+				stack.pop_back();
+				members.push_back(q);
+				const int i = q % W, j = q / W;
+				const int nb[4][2] = {{i - 1, j}, {i + 1, j}, {i, j - 1}, {i, j + 1}};
+				for (const auto& e : nb) {
+					if (e[0] < 0 || e[1] < 0 || e[0] >= W || e[1] >= H) continue;
+					const size_t r = size_t(e[1]) * W + e[0];
+					if (!part.a[r]) {
+						around[group.a[r]]++;
+					} else if (!open.a[r] && !seen[r]) {
+						seen[r] = 1;
+						stack.push_back(int(r));
+					}
+				}
+			}
+			const int to = int(std::max_element(around, around + 5) - around);
+			if (around[kNone] || !around[to]) continue;
+			for (int q : members) group.a[q] = uint8_t(to);
+		}
+	}
+
 	// The textures drawn over the face, where nothing nearer hides them
 	// (a fringe over the eyebrows, say).
 	const double tolerance = 0.02 * (x1 - x0);
