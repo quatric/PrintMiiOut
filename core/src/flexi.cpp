@@ -189,9 +189,11 @@ Mesh makeFlexi(const FlexiInput& in, const FlexiOptions& o, const LogFn& log,
 	tick("draw figure");
 
 	// Sizes, all in millimetres. The knob's edge bulges by bulge at mid-height
-	// into a groove in its ring, so it cannot fall out of the plate.
+	// into a groove in its ring, so it cannot fall out of the plate. The ring is
+	// open at the neck and spreads easily, so the bulge reaches well past the
+	// clearance (about 40 degrees off vertical, still printable).
 	const double clr = std::clamp(0.35 + o.fit, 0.15, 0.8);
-	const double T = std::clamp(0.032 * H, 3.0, 5.0), bulge = 0.22 * T, inkH = 0.6;
+	const double T = std::clamp(0.032 * H, 3.0, 5.0), bulge = 0.4 * T, inkH = 0.6;
 	const double rBase = std::clamp(0.032 * H, 2.6, 5.5), rMin = 1.8;
 	auto sizeJoint = [&](Joint& j, double r) {
 		j.r = r;
@@ -371,8 +373,9 @@ Mesh makeFlexi(const FlexiInput& in, const FlexiOptions& o, const LogFn& log,
 			torso.cell(headTop.x, headTop.y, si, sj);
 			keepComponent(torso, si, sj);
 		}
-		// Every ring has to stay on the head's piece: with a small torso the
-		// swing cut-outs can sever it, and the limb would print loose.
+		// Every ring has to stay on the head's piece, with its wall standing
+		// behind the bulge: with a small torso the swing cut-outs can sever
+		// it or shave it to a knife edge, and the limb would print loose.
 		bool held = true;
 		for (const Joint& j : joints) {
 			size_t want = 0, have = 0;
@@ -382,11 +385,11 @@ Mesh makeFlexi(const FlexiInput& in, const FlexiOptions& o, const LogFn& log,
 			for (int y = std::max(j0, 0); y <= std::min(j1, lab.h - 1); y++)
 				for (int x = std::max(i0, 0); x <= std::min(i1, lab.w - 1); x++) {
 					const double rho = norm(P2(lab.cx(x), lab.cy(y)) - j.at);
-					if (rho < j.r + clr + px || rho > j.rOut) continue;
+					if (rho < j.r + clr + bulge + px || rho > j.rOut) continue;
 					want++;
 					if (torso.at(x, y)) have++;
 				}
-			if (2 * have < want) held = false;
+			if (10 * have < 7 * want) held = false;
 		}
 		if (held) break;
 		if (r0 * 0.85 < rMin) throw std::runtime_error("articulated: the torso is too small to hold the joints; try a bigger size");
