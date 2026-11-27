@@ -691,11 +691,12 @@
           </div>
           <div class="field" data-makes="stamp square-stamp" hidden>
             <span class="label" id="sponge-label">Ink sponge</span>
-            <div class="gender-row" role="group" aria-labelledby="sponge-label">
-              <button class="gender-btn selected" data-sponge="off" type="button" aria-pressed="true">No room</button>
-              <button class="gender-btn"          data-sponge="on"  type="button" aria-pressed="false">3.5 mm room</button>
+            <div class="fit-head">
+              <label class="label" for="sponge" id="sponge-label">Ink sponge room</label>
+              <output id="sponge-value" for="sponge">None</output>
             </div>
-            <div class="field-note">Makes the cap 3.5&nbsp;mm deeper, so a sponge soaked in ink fits between it and the face.</div>
+            <input type="range" id="sponge" min="0" max="5" step="0.5" value="0">
+            <div class="field-note">Makes the cap deeper by this much, so a sponge soaked in ink fits between it and the face. 3 to 4&nbsp;mm suits most sponges.</div>
           </div>
           <div class="field" data-makes="stickers towel shirt" hidden>
             <span class="label" id="paper-label">Paper</span>
@@ -915,7 +916,7 @@
   // ── What to make, and the choices that go with it ─────────────────────────
   const choice = {
     make: 'figure', gender: 'auto', proportions: 'mii', pieces: 'whole', base: 'on', mmu: 'off', hair: 'detailed',
-    shape: 'round', rim: 'on', keychain: 'off', relief: 'raised', border: 'none', sponge: 'off', lettering: 'name', textpos: 'above',
+    shape: 'round', rim: 'on', keychain: 'off', relief: 'raised', border: 'none', lettering: 'name', textpos: 'above',
     paper: 'letter', facestyle: 'photo', theme: 'classic', ink: 'blue', outlines: 'off', mirror: 'off',
   };
   // Printed on paper as a PDF rather than on a 3D printer.
@@ -1202,6 +1203,11 @@
     }
   });
 
+  const spongeInput = document.getElementById('sponge');
+  spongeInput.addEventListener('input', () => {
+    document.getElementById('sponge-value').textContent = spongeInput.value === '0' ? 'None' : `${spongeInput.value} mm`;
+  });
+
   // ── Pin fit, which depends on the printer, so it is kept for next time ────
   const fitInput = document.getElementById('fit');
   // Pins, the bobblehead's ball and the stamps' caps start from different
@@ -1307,7 +1313,7 @@
       fd.append('rim', choice.rim);
       fd.append('relief', choice.relief);
       fd.append('border', choice.border);
-      fd.append('sponge', choice.sponge);
+      fd.append('sponge', spongeInput.value);
       fd.append('lettering', choice.lettering);
       fd.append('text', textInput.value);
       fd.append('text_pos', choice.textpos);

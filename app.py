@@ -445,8 +445,13 @@ def _parse_form() -> tuple[tuple[dict, dict] | None, str | None]:
         "text": _clean_text(request.form.get("text", "")) if lettering == "custom" else "",
         "text_pos": "below" if request.form.get("text_pos") == "below" else "above",
         "border": request.form.get("border") if request.form.get("border") in ("line", "dashed") else "none",
-        "sponge": request.form.get("sponge") == "on",
     }
+
+    try:
+        sponge = float(request.form.get("sponge", "0"))
+    except ValueError:
+        sponge = 0.0
+    choices["sponge"] = round(min(max(sponge, 0.0), 5.0), 1) if math.isfinite(sponge) else 0.0
 
     # Build the API params based on input type
     api_params: dict = {}
@@ -566,7 +571,7 @@ def resolve():
             text=text,
             text_pos=c["text_pos"],
             border=c["border"],
-            ink_room=3.5 if c["sponge"] and c["make"] in ("stamp", "square_stamp") else 0,
+            ink_room=c["sponge"] if c["make"] in ("stamp", "square_stamp") else 0,
         )
     elif c["make"] == "head":
         # The head alone: no body, and a flat cut under the chin for "base".
