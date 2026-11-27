@@ -637,8 +637,8 @@
           <div class="field" data-makes="figure bobblehead head">
             <span class="label" id="hair-label">Hair</span>
             <div class="gender-row" role="group" aria-labelledby="hair-label">
-              <button class="gender-btn selected" data-hair="smooth"   type="button" aria-pressed="true">Smooth</button>
-              <button class="gender-btn"          data-hair="detailed" type="button" aria-pressed="false">Detailed</button>
+              <button class="gender-btn"          data-hair="smooth"   type="button" aria-pressed="false">Smooth</button>
+              <button class="gender-btn selected" data-hair="detailed" type="button" aria-pressed="true">Detailed</button>
               <button class="gender-btn"          data-hair="faceted"  type="button" aria-pressed="false">Faceted</button>
             </div>
           </div>
@@ -789,7 +789,7 @@
           <img src="{{ url_for('static', filename='yeah.webp') }}" alt="" width="39" height="36">
           Yeah! Print it
         </button>
-        <p class="yeah-note" id="yeah-note">Your browser builds it in under half a minute, with up to 1&nbsp;GB of memory. You can doodle while it works.</p>
+        <p class="yeah-note" id="yeah-note">Your browser builds it in under half a minute, with up to 1&nbsp;GB of memory. You can doodle while it works, and keep doodling after.</p>
       </div>
     </form>
 
@@ -800,16 +800,6 @@
         <div><p class="who">PrintMiiOut</p><p class="when">working...</p></div>
       </div>
       <p class="say">Building takes half a minute. Draw something while you wait!</p>
-      <div class="doodle-wrap">
-        <canvas class="doodle" id="doodle" width="320" height="120" aria-label="Doodle canvas, 320 by 120 pixels"></canvas>
-      </div>
-      <div class="tools" role="toolbar" aria-label="Doodle tools">
-        <button class="tool" type="button" data-size="1" aria-pressed="false">Fine pen</button>
-        <button class="tool" type="button" data-size="3" aria-pressed="true">Thick pen</button>
-        <button class="tool" type="button" data-size="0" aria-pressed="false">Eraser</button>
-        <span class="spacer"></span>
-        <button class="tool" type="button" id="doodle-clear">Clear</button>
-      </div>
       <p class="status-text" id="status-text" aria-live="polite">Fetching Mii data from the API...</p>
       <div class="progress-bar-wrap">
         <div class="progress-bar indeterminate" id="progress-bar"></div>
@@ -824,10 +814,6 @@
       </div>
       <p class="say" id="result-say">Your Mii is ready!</p>
       <p id="result-text">Your 3D Mii STL file has been generated successfully.</p>
-      <div class="keepsake" id="keepsake" hidden>
-        <img id="keepsake-img" alt="The doodle you drew while waiting">
-        <p>Your doodle from while you waited. Right-click or long-press to save it.</p>
-      </div>
       <div class="preview" id="preview" hidden>
         <div class="model-view" id="model-view" hidden></div>
         <div class="print-view" id="print-view" hidden></div>
@@ -835,6 +821,21 @@
       </div>
       <a id="download-link" class="btn-download" href="#">Download STL File</a>
       <button class="tool btn-again" id="btn-again" type="button">Create Another</button>
+    </article>
+
+    <!-- Doodle card: stays up after the build finishes -->
+    <article class="px post" id="doodle-card" hidden>
+      <div class="doodle-wrap">
+        <canvas class="doodle" id="doodle" width="320" height="120" aria-label="Doodle canvas, 320 by 120 pixels"></canvas>
+      </div>
+      <div class="tools" role="toolbar" aria-label="Doodle tools">
+        <button class="tool" type="button" data-size="1" aria-pressed="false">Fine pen</button>
+        <button class="tool" type="button" data-size="3" aria-pressed="true">Thick pen</button>
+        <button class="tool" type="button" data-size="0" aria-pressed="false">Eraser</button>
+        <span class="spacer"></span>
+        <button class="tool" type="button" id="doodle-save">Save</button>
+        <button class="tool" type="button" id="doodle-clear">Clear</button>
+      </div>
     </article>
   </main>
 
@@ -868,6 +869,7 @@
     inputCard.hidden    = stage !== 'input';
     progressCard.hidden = stage !== 'progress';
     resultCard.hidden   = stage !== 'result';
+    document.getElementById('doodle-card').hidden = stage === 'input';
   }
 
   // ── Tab switching ─────────────────────────────────────────────────────────
@@ -904,7 +906,7 @@
 
   // ── What to make, and the choices that go with it ─────────────────────────
   const choice = {
-    make: 'figure', gender: 'auto', proportions: 'mii', pieces: 'whole', base: 'on', mmu: 'off', hair: 'smooth',
+    make: 'figure', gender: 'auto', proportions: 'mii', pieces: 'whole', base: 'on', mmu: 'off', hair: 'detailed',
     shape: 'round', rim: 'on', keychain: 'off', relief: 'raised', border: 'none', lettering: 'name', textpos: 'above',
     paper: 'letter', facestyle: 'photo', theme: 'classic', ink: 'blue', outlines: 'off', mirror: 'off',
   };
@@ -1008,7 +1010,7 @@
     document.getElementById('outlines-field').hidden = choice.make !== 'stickers' || !sheetSelect.value;
     document.getElementById('yeah-note').innerHTML = printed
       ? 'Your browser draws the PDF in a few seconds.'
-      : 'Your browser builds it in under half a minute, with up to 1&nbsp;GB of memory. You can doodle while it works.';
+      : 'Your browser builds it in under half a minute, with up to 1&nbsp;GB of memory. You can doodle while it works, and keep doodling after.';
     if (choice.make === 'stickers') listSheets();
   }
 
@@ -1628,6 +1630,7 @@
   }
   function toPixel(e) {
     const r = doodle.getBoundingClientRect();
+    if (!r.width || !r.height) return null; // hidden canvas: 0/0 gave NaN and line() never ended
     return [Math.floor((e.clientX - r.left) / r.width * doodle.width),
             Math.floor((e.clientY - r.top) / r.height * doodle.height)];
   }
@@ -1635,25 +1638,29 @@
   doodle.addEventListener('pointerdown', e => {
     doodle.setPointerCapture(e.pointerId);
     last = toPixel(e);
+    if (!last) return;
     dot(...last);
     drawn = drawn || penSize > 0;
   });
   doodle.addEventListener('pointermove', e => {
     if (!last) return;
     const p = toPixel(e);
+    if (!p) { last = null; return; }
     line(last[0], last[1], p[0], p[1]);
     last = p;
   });
   doodle.addEventListener('pointerup', () => { last = null; });
   doodle.addEventListener('pointercancel', () => { last = null; });
 
+  document.getElementById('doodle-save').addEventListener('click', () => {
+    const a = document.createElement('a');
+    a.href = doodle.toDataURL('image/png');
+    a.download = 'doodle.png';
+    a.click();
+  });
+
   new MutationObserver(() => {
-    const stage = document.body.dataset.stage;
-    if (stage === 'progress') clearDoodle();
-    if (stage === 'result') {
-      document.getElementById('keepsake').hidden = !drawn;
-      if (drawn) document.getElementById('keepsake-img').src = doodle.toDataURL('image/png');
-    }
+    if (document.body.dataset.stage === 'progress') clearDoodle();
   }).observe(document.body, { attributes: true, attributeFilter: ['data-stage'] });
 </script>
 </body>
