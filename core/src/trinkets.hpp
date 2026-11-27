@@ -25,6 +25,7 @@ struct TrinketOptions {
 	std::string text;         // UTF-8, lettered above or below the face
 	bool textBelow = false;   // a straight line under the face; otherwise round the top (or along it)
 	int border = 0;           // stamps: 0 none, 1 a line round the face, 2 a dashed one
+	double inkRoom = 0;       // stamps: mm of extra depth in the cap, for a sponge and ink over the face (0 for none)
 	double fit = 0;           // stamps: mm more room (less below 0) per side for the cap and joints
 	bool assembled = false;   // stamps: every piece where it goes, for checking
 	size_t maxTriangles = 600000;

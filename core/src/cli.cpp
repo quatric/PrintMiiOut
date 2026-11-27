@@ -4,7 +4,7 @@
 //   printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb miiBodyM.glb]
 //                    [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM] [--mmu OUT.3mf] [--mmu-slots 4|5|7] [--hair-smoothing 0-3]
 //                    [--make figure|bobblehead|coin|keychain|stamp|square-stamp|articulated]
-//                    [--size MM] [--square] [--face-shape] [--keychain] [--no-rim] [--engraved] [--border none|line|dashed]
+//                    [--size MM] [--square] [--face-shape] [--keychain] [--no-rim] [--engraved] [--border none|line|dashed] [--ink-room MM]
 //                    [--text TEXT --font font.otf] [--text-below]
 //                    [--voxels 240] [--max-tris 600000]
 //
@@ -103,6 +103,8 @@ int main(int argc, char** argv) {
 			o.rim = false;
 		else if (a == "--engraved")
 			o.engraved = true;
+		else if (a == "--ink-room")
+			o.inkRoom = std::atof(next().c_str());
 		else if (a == "--border") {
 			std::string b = next();
 			o.border = b == "line" ? 1 : b == "dashed" ? 2 : 0;
@@ -124,7 +126,7 @@ int main(int argc, char** argv) {
 		             "usage: printmiiout-core head.glb out.stl [--mask image.png] [--body m|f --body-glb body.glb]\n"
 		             "       [--height N] [--build N] [--no-base] [--split] [--assembled] [--fit MM] [--mmu OUT.3mf] [--mmu-slots 4|5|7] [--hair-smoothing 0-3]\n"
 		             "       [--make figure|bobblehead|coin|keychain|stamp|square-stamp|articulated]\n"
-		             "       [--size MM] [--square] [--face-shape] [--keychain] [--no-rim] [--engraved] [--border none|line|dashed]\n"
+		             "       [--size MM] [--square] [--face-shape] [--keychain] [--no-rim] [--engraved] [--border none|line|dashed] [--ink-room MM]\n"
 		             "       [--text TEXT --font font.otf] [--text-below]\n"
 		             "       [--voxels 240] [--max-tris 600000]\n");
 		return 1;

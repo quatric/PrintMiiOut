@@ -190,6 +190,7 @@ export async function buildInBrowser(form, onStatus, print = {}) {
 			text: lettered ? job.text : '',
 			textBelow: job.text_pos === 'below',
 			border: job.border || 'none',
+			inkRoom: Number(job.ink_room) || 0,
 		},
 	}, transfer, (line) => {
 		const stage = /^\[\s*[\d.]+s\] (.+?): /.exec(line);

@@ -38,6 +38,7 @@ struct Options {
 	std::string text;           // UTF-8
 	bool textBelow = false;
 	int border = 0;             // 0 none, 1 line, 2 dashed
+	double inkRoom = 0;         // stamps: mm of extra depth in the cap, for a sponge and ink
 	Bytes font;                 // an OpenType font for the text (Rodin NTLG on the site)
 	double voxelsPerHead = 240;   // fuse resolution, across the head's width
 	size_t maxTriangles = 600000;

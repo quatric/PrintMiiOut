@@ -90,6 +90,7 @@ val generate(val head, val mask, val body, val options) {
 		if (!options["engraved"].isUndefined()) o.engraved = options["engraved"].as<bool>();
 		if (options["text"].isString()) o.text = options["text"].as<std::string>();
 		if (!options["textBelow"].isUndefined()) o.textBelow = options["textBelow"].as<bool>();
+		if (options["inkRoom"].isNumber()) o.inkRoom = options["inkRoom"].as<double>();
 		if (options["border"].isString()) {
 			std::string kind = options["border"].as<std::string>();
 			o.border = kind == "line" ? 1 : kind == "dashed" ? 2 : 0;

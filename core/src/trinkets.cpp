@@ -605,12 +605,13 @@ Mesh makeRoundStamp(const FaceSource& face, const Font* font, const TrinketOptio
 	};
 
 	// The cap, flush with the grip, held on the plug by crush ribs.
-	const double zCap0 = -1.0 - 1.6, zCap1 = hr + Lc, Rc = Rd + clr;
+	// inkRoom: a deeper cap, so a sponge and ink fit between its floor and the face.
+	const double room = std::clamp(o.inkRoom, 0.0, 6.0), zCap0 = -1.0 - room - 1.6, zCap1 = hr + Lc, Rc = Rd + clr;
 	Sdf cap = [&](const V3& p) {
 		const double rho = std::hypot(p.x, p.y);
 		double outer = extrude(rho - Rg + std::max(0.0, (zCap0 + 0.4) - p.z) + std::max(0.0, p.z - (zCap1 - 0.3)), p.z,
 		                       zCap0, zCap1);
-		double cavity = std::max(rho - (Rc + std::max(0.0, p.z - (zCap1 - 0.5))), -1.0 - p.z);
+		double cavity = std::max(rho - (Rc + std::max(0.0, p.z - (zCap1 - 0.5))), -1.0 - room - p.z);
 		double ribs = std::max(roundRibs(p.x, p.y, Rc, capRib, {0, kPi / 2, kPi, 3 * kPi / 2, kPi / 4, 5 * kPi / 4}),
 		                       std::max((hr + 0.8) - p.z, p.z - (zCap1 - 0.6)));
 		cavity = std::max(cavity, -ribs);
@@ -731,12 +732,12 @@ Mesh makeSquareStamp(const FaceSource& face, const Font* font, const TrinketOpti
 	};
 
 	// The cap, flush with the base, held on the plate by crush ribs.
-	const double zCap0 = -1.0 - 1.6, zCap1 = zb0, cx = dx + clr, cy = dy + clr;
+	const double room = std::clamp(o.inkRoom, 0.0, 6.0), zCap0 = -1.0 - room - 1.6, zCap1 = zb0, cx = dx + clr, cy = dy + clr;
 	Sdf cap = [&](const V3& p) {
 		double outer = extrude(roundRect(p.x, p.y, bx, by, bCorner) + std::max(0.0, (zCap0 + 0.4) - p.z) +
 		                           std::max(0.0, p.z - (zCap1 - 0.3)),
 		                       p.z, zCap0, zCap1);
-		double cavity = std::max(roundRect(p.x, p.y, cx, cy, dCorner + clr) - std::max(0.0, p.z - (zCap1 - 0.5)), -1.0 - p.z);
+		double cavity = std::max(roundRect(p.x, p.y, cx, cy, dCorner + clr) - std::max(0.0, p.z - (zCap1 - 0.5)), -1.0 - room - p.z);
 		double ribs = std::max(rectRibs(p.x, p.y, cx, cy, capRib), std::max((hr + 0.8) - p.z, p.z - (zCap1 - 0.6)));
 		cavity = std::max(cavity, -ribs);
 		return std::max(outer, -cavity);

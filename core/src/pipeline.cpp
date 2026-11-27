@@ -1059,6 +1059,7 @@ Mesh flatMii(std::vector<Part>& parts, Bytes maskBytes, const Options& o,
 	t.text = o.text;
 	t.textBelow = o.textBelow;
 	t.border = o.border;
+	t.inkRoom = o.inkRoom;
 	t.fit = o.fit;
 	t.assembled = o.assembled;
 	t.maxTriangles = o.maxTriangles;

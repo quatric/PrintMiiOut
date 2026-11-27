@@ -689,6 +689,14 @@
               <button class="gender-btn"          data-border="dashed" type="button" aria-pressed="false">Dashed</button>
             </div>
           </div>
+          <div class="field" data-makes="stamp square-stamp" hidden>
+            <span class="label" id="sponge-label">Ink sponge</span>
+            <div class="gender-row" role="group" aria-labelledby="sponge-label">
+              <button class="gender-btn selected" data-sponge="off" type="button" aria-pressed="true">No room</button>
+              <button class="gender-btn"          data-sponge="on"  type="button" aria-pressed="false">3.5 mm room</button>
+            </div>
+            <div class="field-note">Makes the cap 3.5&nbsp;mm deeper, so a sponge soaked in ink fits between it and the face.</div>
+          </div>
           <div class="field" data-makes="stickers towel shirt" hidden>
             <span class="label" id="paper-label">Paper</span>
             <div class="gender-row" role="group" aria-labelledby="paper-label">
@@ -907,7 +915,7 @@
   // ── What to make, and the choices that go with it ─────────────────────────
   const choice = {
     make: 'figure', gender: 'auto', proportions: 'mii', pieces: 'whole', base: 'on', mmu: 'off', hair: 'detailed',
-    shape: 'round', rim: 'on', keychain: 'off', relief: 'raised', border: 'none', lettering: 'name', textpos: 'above',
+    shape: 'round', rim: 'on', keychain: 'off', relief: 'raised', border: 'none', sponge: 'off', lettering: 'name', textpos: 'above',
     paper: 'letter', facestyle: 'photo', theme: 'classic', ink: 'blue', outlines: 'off', mirror: 'off',
   };
   // Printed on paper as a PDF rather than on a 3D printer.
@@ -1299,6 +1307,7 @@
       fd.append('rim', choice.rim);
       fd.append('relief', choice.relief);
       fd.append('border', choice.border);
+      fd.append('sponge', choice.sponge);
       fd.append('lettering', choice.lettering);
       fd.append('text', textInput.value);
       fd.append('text_pos', choice.textpos);
